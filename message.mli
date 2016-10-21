@@ -16,6 +16,8 @@ type mes =
   | NodeStatus of node_status
   | Command of string
   | Nodes of string list * float
+  | Heartbeat of float
+  | HeartbeatResp of string
 
 (* [marshal m] converts a message of type mes into the JSON string
  * representing it *)
