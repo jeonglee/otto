@@ -1,33 +1,27 @@
 Messages between nodes on the network follow the following specification:
 
-Query:
+To C&C:
 
-    JSON:
-        {"query":"BOT"}
+    Req/Resp:
+        Heartbeat Response:
+        {"heartbeat_resp":"<IP of bot>"}
 
-NodeStatus:
+        Test Complete:
+        {"netid":"<netid>","results":"<base64 encoded results file>"}
 
-    JSON:
-        {"status":"OK"}
-        {"status":"BUSY"}
+        File Request:
+        {"files": "<netid>"}
 
-Command:
+From C&C:
 
-    JSON:
-        {"command":"<cmd>"}
+    Publish/Subscribe:
+        {"heartbeat":<time of heartbeat broadcast>, ""}
 
-Nodes:
+    Push/Pull:
+        Tests:
+        {"netid":"<netid>","timeout":<seconds as integer>,"commands":["<shell commands to execute>", ...]}
 
-    JSON
-        ["123.45.67.89:5555", "987.654.321.0:5555"]
-
-
-Heartbeat:
-    
-    JSON
-        ["heartbeat":<timestamp when heartbeat is sent>]
-
-HeartbeatResp:
-    
-    JSON
-        ["heartbeat_resp":"123.45.67.89:5555"]
+    Req/Resp:
+        Files:
+        
+        "[{"filename1":"<base64 encoded data>"}, {"filename2":"<base64 encoded data>"}, ...]"
