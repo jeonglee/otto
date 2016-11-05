@@ -1,24 +1,27 @@
 exception Bad_message
 
-(* node_status represents the status of a node with respect
- * to node balancing.
- * [Ok] represents a node which is not Busy
- * [Busy] represents a node which is handling the maximum number of bots
- * it is configured for. *)
-type node_status =
-  | Ok
-  | Busy
+type ip = string
+type test_key = string
+type timeout = int
+type time = float
+type command = string
 
 (* mes represents the types of messages that can be sent between participants
  * on the botnet *)
 type mes =
-  | Query of string
-  | NodeStatus of node_status
-  | Command of string
-  | Nodes of string list * float
+  | HeartbeatResp of ip
+  | TestCompletion of test_key * string
+  | FileReq of test_key
+  | Heartbeat of time * bool
+  | TestSpec of test_key * timeout * command list
+  | Files of FileCrawler.file list
 
-let marshal m =
-  failwith "Not Implemented"
+(* [marshal m] converts a message of type mes into the JSON string
+ * representing it *)
+let marshal = function
+  | _ -> failwith "Unimplemented"
 
-let unmarshal s =
-  failwith "Not Implemented"
+(* [unmarshal s] converts a message from its JSON serialization into
+ * a mes. Raises Bad_message if the JSON is not a valid message *)
+let unmarshal = function
+  | _ -> failwith "Unimplemented"

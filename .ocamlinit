@@ -1,2 +1,6 @@
 #directory "_build"
 #require "ZMQ"
+
+#load "errable.cmo"
+
+open Errable

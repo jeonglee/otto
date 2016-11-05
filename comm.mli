@@ -1,6 +1,17 @@
 exception Invalid_ctxt
 exception Timeout
 
+type server_config =
+  {
+    port : int
+  }
+
+type client_config =
+  {
+    port : int;
+    remote_ip : Message.ip
+  }
+
 (* A module representing a requester in the requester-responder
  * paradigm. *)
 module type RequesterContext = sig
@@ -21,7 +32,7 @@ module type ResponderContext = sig
   type t
 
   (* [make init] creates a responder context *)
-  val make : 'a -> t
+  val make : server_config -> t
 
   (* [serve f t] blocks and serves a function with [f] as the method of
    *  responding to requests. *)
@@ -38,7 +49,7 @@ module type PublisherContext = sig
   val make : 'a -> t
 
   (* [serve t] blocks and waits to broadcast when send is called on this context *)
-  val serve : t -> unit
+  val serve : server_config -> unit
 
   (* [send m t] broadcasts [m] via context [t] to any subscribers *)
   val send : Message.mes -> t -> unit
@@ -61,7 +72,33 @@ module type SubscriberContext = sig
   val close : t -> t
 end
 
+module type PusherContext = sig
+  type t
+
+  val make : 'a -> t
+
+  val serve : server_config -> unit
+
+  val push : Message.mes -> t -> unit
+
+  val close : t -> t
+end
+
+module type PullerContext = sig
+  type t
+
+  val make : 'a -> t
+
+  val connect : (Message.mes -> unit) -> t -> unit
+
+  val close : t -> t
+end
+
+
+
 module ReqCtxt : RequesterContext
 module RespCtxt : ResponderContext
 module PubCtxt : PublisherContext
 module SubCtxt : SubscriberContext
+module PushCtxt : PullerContext
+module PullCtxt : PusherContext
