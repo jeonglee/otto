@@ -74,18 +74,18 @@ module type SubscriberContext = sig
   val close : t -> t
 end
 
-(* Pushes out tasks to subscribers including information such as
- * netid, commands to execute, and files to request. *)
+(* Represents a pusher in the push/pull paradigm.
+ * Broadcasts a message to a puller whose identity is known *)
 module type PusherContext = sig
   type t
 
   (* [make init] creates a pusher context *)
   val make : 'a -> t
-
-  val serve : server_config -> unit
-
+  
+  (* [push m t] broadcasts a message [m] to a certain puller [t] *)
   val push : Message.mes -> t -> unit
 
+  (* [close t] frees whatever resources were opened in making the context *)
   val close : t -> t
 end
 
