@@ -18,7 +18,7 @@ module type RequesterContext = sig
   type t
 
   (* [make init] creates a requester context *)
-  val make : 'a -> t
+  val make : client_config -> t
   (* [send mess t] sends a message using an initialized context t.
    * it should block until it receives a response or errors out. *)
   val send : Message.mes -> t -> Message.mes
@@ -42,14 +42,13 @@ module type ResponderContext = sig
   val close : t -> t
 end
 
+(* Represents a publisher in the pub/sub paradigm. A publisher broadcasts
+ * a message to all its subscribers *)
 module type PublisherContext = sig
   type t
 
   (* [make init] creates a publisher context *)
-  val make : 'a -> t
-
-  (* [serve t] blocks and waits to broadcast when send is called on this context *)
-  val serve : server_config -> unit
+  val make : server_config -> t
 
   (* [send m t] broadcasts [m] via context [t] to any subscribers *)
   val send : Message.mes -> t -> unit
@@ -65,7 +64,7 @@ module type SubscriberContext = sig
   type t
 
   (* [make init] creates a subscriber context *)
-  val make : 'a -> t
+  val make : client_config -> t
 
   (* [connect f t] connects to a publisher and calls f when the publisher
    * sends a message *)
@@ -75,18 +74,18 @@ module type SubscriberContext = sig
   val close : t -> t
 end
 
-(* Pushes out tasks to subscribers including information such as
- * netid, commands to execute, and files to request. *)
+(* Represents a pusher in the push/pull paradigm.
+ * Broadcasts a message to a puller whose identity is known *)
 module type PusherContext = sig
   type t
 
   (* [make init] creates a pusher context *)
-  val make : 'a -> t
-
-  val serve : server_config -> unit
-
+  val make : server_config -> t
+  
+  (* [push m t] broadcasts a message [m] to a certain puller [t] *)
   val push : Message.mes -> t -> unit
 
+  (* [close t] frees whatever resources were opened in making the context *)
   val close : t -> t
 end
 
@@ -97,7 +96,7 @@ module type PullerContext = sig
   type t
 
   (* [make init] creates a pullers context *)
-  val make : 'a -> t
+  val make : client_config -> t
 
   (* [connect f t] connects to a pusher and calls f when the pusher
    * sends a message *)
