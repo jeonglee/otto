@@ -88,14 +88,20 @@ module type PusherContext = sig
   val close : t -> t
 end
 
+(* Represents a puller in the push/pull paradigm. All pullers
+ * compete to receive any events broadcast by a pusher while the
+ * pullers are connected to the pusher. *)
 module type PullerContext = sig
   type t
 
   (* [make init] creates a pullers context *)
   val make : 'a -> t
 
+  (* [connect f t] connects to a pusher and calls f when the pusher
+   * sends a message *)
   val connect : (Message.mes -> unit) -> t -> unit
 
+  (* [close t] frees whatever resources were opened in making the context *)
   val close : t -> t
 end
 
