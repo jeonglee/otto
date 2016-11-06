@@ -75,6 +75,7 @@ end
 module type PusherContext = sig
   type t
 
+  (* [make init] creates a pusher context *)
   val make : 'a -> t
 
   val serve : server_config -> unit
@@ -87,6 +88,7 @@ end
 module type PullerContext = sig
   type t
 
+  (* [make init] creates a pullers context *)
   val make : 'a -> t
 
   val connect : (Message.mes -> unit) -> t -> unit
