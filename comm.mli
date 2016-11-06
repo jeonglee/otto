@@ -58,6 +58,9 @@ module type PublisherContext = sig
   val close : t -> t
 end
 
+(* Represents a subscriber in the pub/sub paradigm. A subscriber
+ * receives all events broadcast by a publisher after the subscriber
+ * connects to the publisher. *)
 module type SubscriberContext = sig
   type t
 
