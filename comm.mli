@@ -75,6 +75,8 @@ module type SubscriberContext = sig
   val close : t -> t
 end
 
+(* Pushes out tasks to subscribers including information such as
+ * netid, commands to execute, and files to request. *)
 module type PusherContext = sig
   type t
 
