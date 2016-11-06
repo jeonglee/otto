@@ -42,14 +42,13 @@ module type ResponderContext = sig
   val close : t -> t
 end
 
+(* Represents a publisher in the pub/sub paradigm. A publisher broadcasts
+ * a message to all its subscribers *)
 module type PublisherContext = sig
   type t
 
   (* [make init] creates a publisher context *)
   val make : 'a -> t
-
-  (* [serve t] blocks and waits to broadcast when send is called on this context *)
-  val serve : server_config -> unit
 
   (* [send m t] broadcasts [m] via context [t] to any subscribers *)
   val send : Message.mes -> t -> unit
