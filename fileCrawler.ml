@@ -26,5 +26,5 @@ let files_from_dir dir =
     | End_of_file -> Unix.closedir handle; []) in "yes"
 
 
-let write_file (name,contents) =
+let write_file ?dir:(d=".") (name,contents) =
   failwith "Unimplemented"
