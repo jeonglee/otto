@@ -2,3 +2,4 @@ S .
 B _build/
 PKG oUnit
 PKG yojson
+PKG ZMQ
