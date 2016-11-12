@@ -18,7 +18,7 @@ module type RequesterContext = sig
   type t
 
   (* [make init] creates a requester context *)
-  val make : 'a -> t
+  val make : client_config -> t
   (* [send mess t] sends a message using an initialized context t.
    * it should block until it receives a response or errors out. *)
   val send : Message.mes -> t -> Message.mes
@@ -48,7 +48,7 @@ module type PublisherContext = sig
   type t
 
   (* [make init] creates a publisher context *)
-  val make : 'a -> t
+  val make : server_config -> t
 
   (* [send m t] broadcasts [m] via context [t] to any subscribers *)
   val send : Message.mes -> t -> unit
@@ -64,7 +64,7 @@ module type SubscriberContext = sig
   type t
 
   (* [make init] creates a subscriber context *)
-  val make : 'a -> t
+  val make : client_config -> t
 
   (* [connect f t] connects to a publisher and calls f when the publisher
    * sends a message *)
@@ -80,7 +80,7 @@ module type PusherContext = sig
   type t
 
   (* [make init] creates a pusher context *)
-  val make : 'a -> t
+  val make : server_config -> t
   
   (* [push m t] broadcasts a message [m] to a certain puller [t] *)
   val push : Message.mes -> t -> unit
@@ -96,7 +96,7 @@ module type PullerContext = sig
   type t
 
   (* [make init] creates a pullers context *)
-  val make : 'a -> t
+  val make : client_config -> t
 
   (* [connect f t] connects to a pusher and calls f when the pusher
    * sends a message *)
