@@ -1,3 +1,6 @@
+open Yojson.Basic.Util
+open Errable
+
 exception Bad_message
 
 type ip = string
@@ -46,7 +49,33 @@ let marshal = function
     let flst = get_flst lst "" in
     "[" ^ flst ^ "]"
 
+let rec extract_files jlst acc =
+  match jlst with
+  | (`Assoc [(s, `String contents)])::tl -> extract_files tl ((s, contents)::acc)
+  | [] -> List.rev acc
+  | _ -> raise Bad_message
+
 (* [unmarshal s] converts a message from its JSON serialization into
  * a mes. Raises Bad_message if the JSON is not a valid message *)
-let unmarshal = function
-  | _ -> failwith "Unimplemented"
+let unmarshal (m:string) : mes errable =
+  let j =
+    begin
+      try Yojson.Basic.from_string m
+      with _ -> `Null
+    end
+  in
+  match j with
+  | `Assoc [("heartbeat_resp", `String s)] -> Ok(HeartbeatResp s)
+  | `Assoc [("netid", `String k);("results", `String r)] -> Ok(TestCompletion (k, r))
+  | `Assoc [("files", `String k)] -> Ok(FileReq k)
+  | `Assoc [("heartbeat", `Float t);("done", `Bool d)] -> Ok(Heartbeat (t, d))
+  | `Assoc [("key", `String k);("timeout", `Int t);("commands", `List lst)] ->
+    let clst = convert_each to_string (`List lst) in
+    Ok(TestSpec (k, t, clst))
+  | `Assoc _ -> Err Bad_message
+  | `List lst ->
+    begin
+      try let f = extract_files lst [] in Ok (Files f)
+      with e -> Err e
+    end
+  | _ -> Err Bad_message
