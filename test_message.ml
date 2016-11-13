@@ -44,7 +44,7 @@ let msg_tests = "Message tests" >::: [
 
   "marshal testspec2" >::
     (fun _ -> assert_equal
-      "{\"netid\":\"common\",\"timeout\":60,\"commands\":[\"ls\",\"cd ~\"]}"
+      "{\"key\":\"common\",\"timeout\":60,\"commands\":[\"ls\",\"cd ~\"]}"
       (marshal testspec2));
 
   "marshal files" >::
@@ -54,8 +54,7 @@ let msg_tests = "Message tests" >::: [
 
   "marshal files2" >::
     (fun _ -> assert_equal
-      "[{\"message.ml\":\"type ip = string\"},
-        {\"file.ml\":\"type file = string * string\"}]"
+      "[{\"message.ml\":\"type ip = string\"},{\"file.ml\":\"type file = string * string\"}]"
       (marshal files2));
 
 (*
