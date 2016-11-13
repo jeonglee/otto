@@ -1,5 +1,6 @@
 open OUnit
 open Message
+open Errable
 
 (* TODO: add test cases using base64 encoding (where appropriate) *)
 
