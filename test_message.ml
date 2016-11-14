@@ -171,10 +171,6 @@ let msg_tests = "Message tests" >::: [
     (fun _ -> assert_equal (Err Bad_message)
       (unmarshal "{\"message.ml\":\"type ip = string\"}"));
 
-  (* There may be a problem with how we're running tests (aka test.ml) *)
-  (* Or not, but why would unmarshal tests not work here but work in utop?? *)
-  (* Also, should an empty file list raise Bad_message or not?? *)
-
 ]
 
 let () = Test.add_test msg_tests
