@@ -35,4 +35,7 @@ let files_from_dir dir =
   Ok (construct_file_list handle file1 dir)
 
 let write_file ?dir:(d=".") (name,contents) =
-  failwith "Unimplemented"
+  let path = d ^ slash ^ name  in
+  let out_channel = open_out path in
+  let _ = output_string out_channel contents in
+  try (Ok (close_out out_channel)) with (Sys_error err) -> Err (Sys_error err)
