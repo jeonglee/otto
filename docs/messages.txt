@@ -15,13 +15,14 @@ To C&C:
 From C&C:
 
     Publish/Subscribe:
-        {"heartbeat":<time of heartbeat broadcast>, ""}
+        {"heartbeat":<time of heartbeat broadcast>, "done":<bool signifying whether
+        testing is complete>}
 
     Push/Pull:
         Tests:
-        {"netid":"<netid>","timeout":<seconds as integer>,"commands":["<shell commands to execute>", ...]}
+        {"key":"<netid>","timeout":<seconds as integer>,"commands":["<shell commands to execute>", ...]}
 
     Req/Resp:
         Files:
-        
+
         "[{"filename1":"<base64 encoded data>"}, {"filename2":"<base64 encoded data>"}, ...]"
