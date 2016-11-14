@@ -24,15 +24,15 @@ let rec construct_file_list handle file dir =
                   | None   -> closedir handle; []
 
 let files_from_dir dir =
-  let handle = try Ok opendir dir with Unix_error(_,_,_) -> Err Not_found in
+  let handle = try Ok (opendir dir) with Unix_error(_,_,_) -> Err Not_found in
                match handle with
                | Err e -> Err e
                | Ok h ->
-  let file1  = try Ok readdir h with End_of_file -> Err Not_found in
+                   let file1  = try Ok (readdir h) with End_of_file -> Err Not_found in
                match file1 with
                | Err e -> closedir h; Err e
                | Ok f ->
-  Ok (construct_file_list handle file1 dir)
+                   Ok (construct_file_list (?!handle) (?!file1) dir)
 
 let write_file ?dir:(d=".") (name,contents) =
   let path = d ^ slash ^ name  in
