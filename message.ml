@@ -19,13 +19,9 @@ type mes =
   | TestSpec of test_key * timeout * command list
   | Files of FileCrawler.file list
 
-(* TODO: add commas somehow*)
-
 let rec get_clst lst acc = match lst with
   | h::t -> get_clst t (acc ^ "\"" ^ h ^ "\",")
   | [] -> if acc = "" then "" else String.sub acc 0 (String.length acc - 1)
-
-(* TODO: add commas somehow*)
 
 let rec get_flst lst acc = match lst with
   | (n, c)::t -> get_flst t (acc ^ "{\"" ^ n ^ "\":\"" ^ c ^ "\"},")
