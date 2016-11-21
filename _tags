@@ -1,2 +1,2 @@
-<*.ml> : thread
-<*.{native,byte}> : thread
+<*.ml> : thread,debug
+<*.{native,byte}> : thread,debug

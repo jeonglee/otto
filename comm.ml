@@ -118,7 +118,7 @@ open Message
 
 module Sock = ZMQ.Socket
 
-let ctxt = ZMQ.Context.create ()
+let ctxt () = ZMQ.Context.create ()
 
 let five_seconds = 5 * 1000
 
@@ -128,16 +128,33 @@ let make_conn_str ip port =
 let make_bind_str port =
   "tcp://*:" ^ (string_of_int port)
 
-let cleanup () =
-  ZMQ.Context.terminate ctxt
+let cleanup ctxt = ZMQ.Context.terminate ctxt
 
-let () = at_exit cleanup
+type 'a conn_type = {sock : 'a Sock.t; ctxt : ZMQ.Context.t}
+
+let make_conn kind =
+  let c = ctxt() in
+  let s = Sock.create c kind in
+  {sock=s;ctxt=c}
+
+let clean_conn c =
+  Sock.close c.sock;
+  cleanup c.ctxt
+
+let try_finally (f : unit -> unit) (final : unit -> unit) =
+  try
+    f ();
+    final ()
+  with
+  | e -> final (); raise e
+
+open Unix
 
 module ReqCtxt : RequesterContext = struct
   type 'a t = {
     port : int;
     hostname : string;
-    sock : 'a Sock.t;
+    conn : 'a conn_type;
   }
   constraint 'a = [> `Req]
 
@@ -145,20 +162,22 @@ module ReqCtxt : RequesterContext = struct
     let o = {
       port = conf.port;
       hostname = conf.remote_ip;
-      sock = Sock.create ctxt Sock.req;
+      conn = make_conn Sock.req;
     } in
-    Sock.connect o.sock (make_conn_str o.hostname o.port);
-    Sock.set_send_timeout o.sock five_seconds;
-    Sock.set_receive_timeout o.sock five_seconds;
+    Sock.connect o.conn.sock (make_conn_str o.hostname o.port);
+    Sock.set_send_timeout o.conn.sock five_seconds;
+    Sock.set_receive_timeout o.conn.sock five_seconds;
     o
 
   let close (c : [>`Req] t) =
-    Sock.close c.sock; c
+    clean_conn c.conn; c
 
   let send m (c : [>`Req] t) =
+    print_endline "Sent";
     try
-      Sock.send c.sock (Message.marshal m);
-      let resp = Sock.recv c.sock in
+      Sock.send c.conn.sock (Message.marshal m);
+      let resp = Sock.recv c.conn.sock in
+      print_endline "Recv";
       Message.unmarshal resp
     with
     | e -> Err e
@@ -167,7 +186,7 @@ end
 module RespCtxt : ResponderContext = struct
   type 'a t = {
     port : int;
-    sock : 'a Sock.t;
+    conn : 'a conn_type;
     die : bool ref;
     die_lock : Mutex.t;
   }
@@ -176,13 +195,13 @@ module RespCtxt : ResponderContext = struct
   let make (conf : server_config) =
     let o = {
       port = conf.port;
-      sock = Sock.create ctxt Sock.rep;
+      conn = make_conn Sock.rep;
       die = ref false;
       die_lock = Mutex.create ();
     } in
-    Sock.bind o.sock (make_bind_str conf.port);
-    Sock.set_send_timeout o.sock five_seconds;
-    Sock.set_receive_timeout o.sock five_seconds;
+    Sock.bind o.conn.sock (make_bind_str conf.port);
+    Sock.set_send_timeout o.conn.sock five_seconds;
+    Sock.set_receive_timeout o.conn.sock five_seconds;
     o
 
   let close (c : [>`Rep] t) =
@@ -192,18 +211,26 @@ module RespCtxt : ResponderContext = struct
     c
 
   let serve (f: Message.mes -> (Message.mes -> unit) -> unit) (c : [>`Rep] t) =
-    let cbf m = Sock.send c.sock (marshal m) in
-    let rec loop () =
-      let req = Sock.recv c.sock in
-      (match (unmarshal req) with
-      | Ok m -> f m cbf
-      | _ -> ());
+    let cbf m = Sock.send c.conn.sock (marshal m) in
+    let rec loop () : unit =
+      begin
+        try
+          let req = Sock.recv c.conn.sock in
+          (match (unmarshal req) with
+          | Ok m -> f m cbf
+          | _ -> ());
+        with
+        | Unix_error (EAGAIN, "zmq_msg_recv", "") -> ()
+      end;
+
       Mutex.lock c.die_lock;
-      if !(c.die)
-      then (Mutex.unlock c.die_lock; Sock.close c.sock)
-      else Mutex.unlock c.die_lock; loop ()
+      begin
+        if (!(c.die) = true)
+        then Mutex.unlock (c.die_lock)
+        else (Mutex.unlock (c.die_lock); loop ())
+      end
     in
-    loop ()
+    try_finally loop (fun () -> clean_conn c.conn)
 
 end
 
