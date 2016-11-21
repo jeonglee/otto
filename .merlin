@@ -6,3 +6,4 @@ PKG yojson
 PKG ZMQ
 PKG unix
 PKG threads
+PKG str
