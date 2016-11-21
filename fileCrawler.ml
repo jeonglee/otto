@@ -1,4 +1,3 @@
-exception Not_found
 open Unix
 open Str
 open Errable
