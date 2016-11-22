@@ -173,11 +173,9 @@ module ReqCtxt : RequesterContext = struct
     clean_conn c.conn; c
 
   let send m (c : [>`Req] t) =
-    print_endline "Sent";
     try
       Sock.send c.conn.sock (Message.marshal m);
       let resp = Sock.recv c.conn.sock in
-      print_endline "Recv";
       Message.unmarshal resp
     with
     | e -> Err e
@@ -237,18 +235,28 @@ end
 module PubCtxt : PublisherContext = struct
   type 'a t = {
     port : int;
-    sock : 'a Sock.t;
+    conn : 'a conn_type;
   }
     constraint 'a = [> `Pub]
 
-  let make c =
-    failwith "Unimplemented"
+  let make (conf : server_config) =
+    let o = {
+      port = conf.port;
+      conn = make_conn Sock.pub;
+    } in
+    Sock.bind o.conn.sock (make_bind_str conf.port);
+    Sock.set_send_timeout o.conn.sock five_seconds;
+    o
 
   let send m t =
-    failwith "Unimplemented"
+    let messtr = (marshal m) in
+    try
+      Sock.send t.conn.sock messtr
+    with
+    | Unix_error (EAGAIN, _,_) -> raise Timeout
 
   let close t =
-    failwith "Unimplemented"
+    clean_conn t.conn; t
 
 end
 
@@ -256,18 +264,51 @@ module SubCtxt : SubscriberContext = struct
   type 'a t = {
     port : int;
     hostname : string;
-    sock : 'a Sock.t;
+    conn : 'a conn_type;
+    die : bool ref;
+    die_lock : Mutex.t;
   }
   constraint 'a = [> `Sub]
 
   let make (conf : client_config) =
-    failwith "Unimplemented"
+    let o = {
+      port = conf.port;
+      hostname = conf.remote_ip;
+      conn = make_conn Sock.sub;
+      die = ref false;
+      die_lock = Mutex.create ();
+    } in
+    Sock.connect o.conn.sock (make_conn_str o.hostname o.port);
+    Sock.subscribe o.conn.sock "";
+    Sock.set_receive_timeout o.conn.sock five_seconds;
+    o
 
   let close c =
-    failwith "Unimplemented"
+    Mutex.lock c.die_lock;
+    c.die := true;
+    Mutex.unlock c.die_lock;
+    c
 
-  let connect f t =
-    failwith "Unimplemented"
+  let connect f c =
+    let rec loop () : unit =
+      begin
+        try
+          let req = Sock.recv c.conn.sock in
+          (match (unmarshal req) with
+           | Ok m -> (f m)
+           | _ -> ());
+        with
+        | Unix_error (EAGAIN, "zmq_msg_recv", "") -> ()
+      end;
+
+      Mutex.lock c.die_lock;
+      begin
+        if (!(c.die) = true)
+        then Mutex.unlock (c.die_lock)
+        else (Mutex.unlock (c.die_lock); loop ())
+      end
+    in
+    try_finally loop (fun () -> clean_conn c.conn)
 end
 
 module PushCtxt : PusherContext = struct
@@ -293,7 +334,6 @@ module PushCtxt : PusherContext = struct
 
   let close t =
     clean_conn t.conn; t
-
 end
 
 (* TODO (this will need to loop, similar to resp) *)
@@ -334,7 +374,7 @@ module PullCtxt : PullerContext = struct
       begin
         try
           let pull = Sock.recv t.conn.sock in
-          (match (unmarshal pull) with
+          (match (Message.unmarshal pull) with
           | Ok m -> f m
           | _ -> ());
         with
