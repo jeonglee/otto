@@ -11,7 +11,7 @@ let files_from_dir_tests =
       "non-existent directory" >:: (fun _ ->
           assert_equal (Err Not_found) (files_from_dir "abc"));
       "testFileCrawler" >:: (fun _ ->
-          assert_equal (Ok [("test.txt","hello world!")]) (files_from_dir "testFileCrawler"));
+          assert_equal [("testFileCrawler/test.txt","hello world!\n")] ((files_from_dir "testFileCrawler") |> (?!)));
     ]
 
 let () = Test.add_test files_from_dir_tests
