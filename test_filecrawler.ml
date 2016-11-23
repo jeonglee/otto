@@ -14,7 +14,12 @@ let files_from_dir_tests =
       "non-existent directory" >:: (fun _ ->
           assert_equal (Err Not_found) (files_from_dir "abc"));
       "testFileCrawler" >:: (fun _ ->
-          assert_equal [("testFileCrawler/test.txt","hello world!\n")] ((files_from_dir "testFileCrawler") |> (?!)));
+          assert_equal
+          [("testFileCrawler/test.txt", "hello world!\n");
+          ("testFileCrawler/one.txt", "");
+          ("testFileCrawler/new1.txt", "camel");
+          ("testFileCrawler/new.txt", "otto")]
+          ((files_from_dir "testFileCrawler") |> (?!)));
     ]
 
 let file_to_string f =
