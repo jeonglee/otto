@@ -32,38 +32,47 @@ module ClientImpl : Client = struct
     sub : SubCtxt.t;          (* For subscribing to the heartbeat *)
     hb_resp : RespCtxt.t;     (* For responding to the heartbeat *)
     pull : PullCtxt.t;        (* For pulling tests *)
-    file_req : ReqCtxt.t;     (* For getting and returning files *)
+    file_req : ReqCtxt.t;     (* For getting files to grade *)
+    return : ReqCtxt.t        (* For returning graded results *)
   }
 
   let make conf =
-    let client_conf = {
-      port = conf.remote_port;
-      remote_ip = conf.remote_ip;
-    } in
-
-    let server_conf = {
-      port = conf.port;
-    }
-
     let o = {
-      remote_port      = conf.remote_port;
-      remote_ip = conf.remote_ip;
-      test_dir  = conf.test_dir;
-      sub       = SubCtxt.make client_conf;
-      hb_resp   = RespCtxt.make server_conf; (* PROBLEM *)
-      pull      = PullCtxt.make client_conf;
-      file_req  = ReqCtxt.make client_conf;
+      remote_port = conf.remote_port;
+      remote_ip   = conf.remote_ip;
+      test_dir    = conf.test_dir;
+      sub         = SubCtxt.make {port = conf.remote_port;
+                                  remote_ip = conf.remote_ip};
+      pull        = PullCtxt.make {port = conf.remote_port + 1;
+                                  remote_ip = conf.remote_ip};
+      file_req    = ReqCtxt.make {port = conf.remote_port + 2;
+                                  remote_ip = conf.remote_ip};
+      return      = ReqCtxt.make {port = conf.remote_port + 3;
+                                  remote_ip = conf.remote_ip};
+      hb_resp     = RespCtxt.make {port = conf.remote_port + 4}
     } in
     o
 
   let main c = failwith "unimplemented"
 
   let close c =
-    let c1 = SubCtxt.close c in
-    let c2 = RespCtxt.close c1 in
-    let c3 = PullCtxt.close c2 in
-    let c4 = ReqCtxt.close c3 in
-    c4
+    let s = SubCtxt.close c.sub in
+    let h = RespCtxt.close c.hb_resp in
+    let p = PullCtxt.close c.pull in
+    let f = ReqCtxt.close c.file_req in
+    let r = ReqCtxt.close c.return in
+    let o = {
+      remote_port = c.remote_port;
+      remote_ip   = c.remote_ip;
+      test_dir    = c.test_dir;
+      sub         = s;
+      pull        = p;
+      file_req    = f;
+      return      = r;
+      hb_resp     = h
+    } in
+    o
+
 
 end
 
