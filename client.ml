@@ -1,4 +1,5 @@
 open Errable
+open Comm
 
 type config = {
   remote_port : int; (* Base port the C&C server is running on *)
@@ -24,7 +25,14 @@ module type Client = sig
 end
 
 module ClientImpl : Client = struct
-  type t = ()
+  type t = {
+    port : int;
+    remote_ip : Message.ip;
+    sub : SubCtxt.t;          (* For subscribing to the heartbeat *)
+    hb_resp : RespCtxt.t;     (* For responding to the heartbeat *)
+    pull : PullCtxt.t;        (* For pulling tests *)
+    file_req : ReqCtxt.t;     (* For getting and returning files *)
+  }
 
   let make config = failwith "unimplemented"
 
