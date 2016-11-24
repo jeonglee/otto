@@ -34,11 +34,26 @@ module ClientImpl : Client = struct
     file_req : ReqCtxt.t;     (* For getting and returning files *)
   }
 
-  let make config = failwith "unimplemented"
+  let make (conf: client_config) =
+    let o = {
+      port      = conf.port;
+      remote_ip = conf.remote_ip;
+      sub       = SubCtxt.make conf;
+      hb_resp   = RespCtxt.make conf;
+      pull      = PullCtxt.make conf;
+      file_req  = ReqCtxt.make conf;
+    } in
+    o
+
 
   let main c = failwith "unimplemented"
 
-  let close c = failwith "unimplemented"
+  let close c =
+    let c1 = SubCtxt.close c in
+    let c2 = RespCtxt.close c1 in
+    let c3 = PullCtxt.close c2 in
+    let c4 = ReqCtxt.close c3 in
+    c4
 
 end
 
