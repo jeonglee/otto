@@ -28,23 +28,29 @@ module ClientImpl : Client = struct
   type t = {
     port : int;
     remote_ip : Message.ip;
+    test_dir : string;
     sub : SubCtxt.t;          (* For subscribing to the heartbeat *)
     hb_resp : RespCtxt.t;     (* For responding to the heartbeat *)
     pull : PullCtxt.t;        (* For pulling tests *)
     file_req : ReqCtxt.t;     (* For getting and returning files *)
   }
 
-  let make (conf: client_config) =
+  let make conf =
+    let client_conf = {
+      port = conf.port;
+      remote_ip = conf.remote_ip;
+    }
+
     let o = {
       port      = conf.port;
       remote_ip = conf.remote_ip;
-      sub       = SubCtxt.make conf;
-      hb_resp   = RespCtxt.make conf;
-      pull      = PullCtxt.make conf;
-      file_req  = ReqCtxt.make conf;
+      test_dir  = conf.test_dir;
+      sub       = SubCtxt.make client_conf;
+      hb_resp   = RespCtxt.make client_conf;
+      pull      = PullCtxt.make client_conf;
+      file_req  = ReqCtxt.make client_conf;
     } in
     o
-
 
   let main c = failwith "unimplemented"
 
