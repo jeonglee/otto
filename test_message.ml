@@ -7,7 +7,7 @@ open Errable
 let heartbeatresp = HeartbeatResp "123.456.78.90"
 let testcomp = TestCompletion ("abc12", "Passed all tests")
 let filereq = FileReq "abc12"
-let heartbeat = Heartbeat (10.5, false)
+let heartbeat = Heartbeat (10.0, false)
 let testspec = TestSpec ("common", 60, [])
 let files = Files []
 
@@ -35,7 +35,7 @@ let msg_tests = "Message tests" >::: [
 
   "marshal heartbeat" >::
     (fun _ -> assert_equal
-      "{\"heartbeat\":10.5,\"done\":false}"
+      "{\"heartbeat\":10.0,\"done\":false}"
       (marshal heartbeat));
 
   "marshal testspec" >::
@@ -72,7 +72,7 @@ let msg_tests = "Message tests" >::: [
 
   "unmarshal heartbeat" >::
     (fun _ -> assert_equal (Ok heartbeat)
-      (unmarshal "{\"heartbeat\":10.5,\"done\":false}"));
+      (unmarshal "{\"heartbeat\":10.0,\"done\":false}"));
 
   "unmarshal testspec" >::
     (fun _ -> assert_equal (Ok testspec)
