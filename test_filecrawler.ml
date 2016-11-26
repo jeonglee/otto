@@ -15,10 +15,10 @@ let files_from_dir_tests =
           assert_equal (Err Not_found) (files_from_dir "abc"));
       "testFileCrawler" >:: (fun _ ->
           assert_equal
-          [("testFileCrawler/test.txt", "hello world!\n");
+          [("testFileCrawler/test.txt", "aGVsbG8gd29ybGQhCg==");
           ("testFileCrawler/one.txt", "");
-          ("testFileCrawler/new1.txt", "camel");
-          ("testFileCrawler/new.txt", "otto")]
+          ("testFileCrawler/new1.txt", "Y2FtZWw=");
+          ("testFileCrawler/new.txt", "b3R0bw==")]
           ((files_from_dir "testFileCrawler") |> (?!)));
     ]
 

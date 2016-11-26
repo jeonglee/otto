@@ -1,5 +1,6 @@
 #directory "_build"
 #require "ZMQ"
+#require "base64"
 
 #load "errable.cmo"
 

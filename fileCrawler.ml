@@ -10,7 +10,7 @@ let file_to_string f =
   let s = Bytes.create len in
   really_input in_channel s 0 len;
   close_in in_channel;
-  Bytes.to_string s
+  s |> Bytes.to_string |> B64.encode
 
 let slash = Filename.dir_sep
 
