@@ -1,5 +1,6 @@
 open OUnit
 open Errable
+open Errable.M
 
 let errable_add x y = Ok (x + y)
 let fails _ = Err Not_found

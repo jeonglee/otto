@@ -12,20 +12,29 @@ type config =
 
 (* Commander handles command and control for a test cluster.
  * It pushes tests contained in a specified test directory to test bots
- * who request files from the command server for testing. 
+ * who request files from the command server for testing.
  * Commander then aggregates the results. *)
 module type Commander = sig
-  type t
+  type 'a t
+    constraint 'a = [> `Pub | `Push |`Rep]
 
   (* make creates a new instance of Commander with the given config *)
-  val make : config -> t errable
+  val make : config -> 'a t errable
 
   (* Runs all of the tests specified in config, then returns Ok () on success, or
    * Err e where e is the reason testing failed. *)
-  val main : t -> unit errable
+  val main : 'a t -> unit errable
 
   (* closes frees any system resources allocated during the usage of Commander *)
-  val close : t -> t
+  val close : 'a t -> 'a t
+
+  val set_success_callback :
+    (Message.test_key -> unit) -> 'a t -> 'a t
+  val set_failure_callback :
+    (Message.test_key -> unit) -> 'a t -> 'a t
+  val set_client_timeout_callback :
+    (Message.ip -> unit) -> 'a t -> 'a t
+
 
 end
 

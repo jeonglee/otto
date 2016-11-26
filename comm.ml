@@ -141,14 +141,8 @@ let clean_conn c =
   Sock.close c.sock;
   cleanup c.ctxt
 
-let try_finally (f : unit -> unit) (final : unit -> unit) =
-  try
-    f ();
-    final ()
-  with
-  | e -> final (); raise e
-
 open Unix
+open Util
 
 module ReqCtxt : RequesterContext = struct
   type 'a t = {

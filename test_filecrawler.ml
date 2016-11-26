@@ -1,5 +1,6 @@
 open OUnit
 open Errable
+open Errable.M
 open FileCrawler
 open Unix
 open Str
