@@ -60,11 +60,17 @@ module ClientImpl : Client = struct
     let sum = List.fold_left (+) 0 exit_codes in
     if sum = 0 then () else failwith "failed to execute pulled commands"
 
+  let run_tests netid files commands =
+    (* flush stdout before we begin *)
+    (* make a directory named netid containing files *)
+    (* change into that directory *)
+    (* execute (!commands) *)
+    (* return string containing stdout *)
+
   let main c =
     (* set up a thread running the heartbeat check function *)
 
     let rec main_loop c =
-      (*let () = flush stdout in*)
       let netid = ref "" in
       let timeout = ref -1 in
       let commands = ref [] in
@@ -80,7 +86,7 @@ module ClientImpl : Client = struct
       | Err e ->  Err e
       | Ok f  ->  files := f;
                   execute (!commands);
-                  (* write stdout to a file and send it back *)
+                  (* call run_tests *)
                   (* send results back by making a TestCompletion record *)
                   (*  and calling ReqCtxt.send and c.file_req *)
                   (* loop/recurse *)
