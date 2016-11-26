@@ -79,8 +79,13 @@ module ClientImpl : Client = struct
     flush stdout;
     Unix.dup2 old Unix.stdout;
 
+  (* TODO: helper function for receiving and responding to heartbeats *)
+  let hb_handler c (u: unit) =
+    failwith "unimplemented"
+
   let main c =
-    (* set up a thread running the heartbeat check function *)
+    (* TODO: set up a thread running the heartbeat check function *)
+    let hb = Async.run_in_background (hb_handler c) in
 
     let rec main_loop c =
       let netid = ref "" in
@@ -94,18 +99,14 @@ module ClientImpl : Client = struct
       (*---------- everything for pull up to here ----------*)
       let files = ref [] in
       let req_mes = FileReq (!netid) in
-      match (unmarshal (ReqCtxt.send req_mes c.file_req)) with
+      match (Message.unmarshal (ReqCtxt.send req_mes c.file_req)) with
       | Err e ->  Err e
       | Ok f  ->  files := f;
                   let results = run_tests (!netid) (!files) (!commands) in
-                  (* call run_tests *)
-                  (* send results back by making a TestCompletion record *)
-                  (*  and calling ReqCtxt.send and c.file_req *)
-                  (* loop/recurse *)
+                  let res_mes = TestCompletion (!netid, results) in
+                  let ack = ReqCtxt.send res_mes c.return) in
                   main_loop c
     in main_loop c
-
-
 
   let close c =
     let s = SubCtxt.close c.sub in
