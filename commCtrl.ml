@@ -83,6 +83,13 @@ module IPTimeMap = struct
     Mutex.unlock t.lock;
     List.iter c old_ips
 
+  let connected_ips t =
+    Mutex.lock t.lock;
+    let m = !(t.map) in
+    let o = IPMap.bindings m |> List.split |> fst in
+    Mutex.unlock t.lock;
+    o
+
 end
 
 module StrSet : (Set.S with type elt = string) = Set.Make(OrdStr)
