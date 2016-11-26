@@ -54,5 +54,5 @@ let files_from_dir dir =
 let write_file ?dir:(d=".") (name,contents) =
   let path = d ^ slash ^ name  in
   let out_channel = open_out path in
-  let _ = output_string out_channel contents in
+  let _ = output_string out_channel (B64.decode contents) in
   try (Ok (close_out out_channel)) with (Sys_error err) -> Err (Sys_error err)
