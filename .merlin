@@ -1,4 +1,9 @@
 S .
 B _build/
+B +threads
 PKG oUnit
 PKG yojson
+PKG ZMQ
+PKG unix
+PKG threads
+PKG str

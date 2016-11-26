@@ -1,7 +1,9 @@
 #directory "_build"
 #require "ZMQ"
 #require "base64"
+#require "yojson"
 
 #load "errable.cmo"
+#load "message.cmo"
 
 open Errable
