@@ -53,15 +53,21 @@ module ClientImpl : Client = struct
     } in
     o
 
-  (* do on pull:
-  {"key":"<netid>","timeout":<seconds as integer>,"commands":["<shell commands to execute>", ...]} *)
-  let do_on_pull (m : Message.mes) : unit =
-    match m with
-    | TestSpec(key,timeout,command) -> ()
-    | _ -> Comm.Invalid_ctxt
+  (* execute pulled commands and returns unit if successful, and raises failure
+   * otherwise. A command execution is 'successful' if its exit code is 0 *)
+  let execute commands =
+    let exit_codes = List.map Sys.command commands in
+    let sum = List.fold_left (+) 0 exit_codes in
+    if sum = 0 then () else failwith "failed to execute pulled commands"
 
-  let main c = failwith "unimplemented"
-    (* let () = PullCtxt.connect do_on_pull c.pull in *)
+  let main c =
+    let netid = ref "" in
+    let timeout = ref -1 in
+    let do_on_pull = function
+      | TestSpec(key,t,cmds) -> netid:=key; timeout:=t; execute cmds
+      | _ -> raise Comm.Invalid_ctxt
+    in PullCtxt.connect do_on_pull c.pull
+    (*---------- everything for pull up to here ----------*)
 
   let close c =
     let s = SubCtxt.close c.sub in
