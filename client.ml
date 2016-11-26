@@ -80,14 +80,17 @@ module ClientImpl : Client = struct
     Unix.dup2 old Unix.stdout;
 
   (* TODO: helper function for receiving and responding to heartbeats *)
-  let hb_handler c (u: unit) =
+  (* This will also be responsible for checking when grading is done *)
+  (* When it is, it should set the value at [done] to true *)
+  let hb_handler c done (u: unit) =
     failwith "unimplemented"
 
   let main c =
     (* TODO: set up a thread running the heartbeat check function *)
-    let hb = Async.run_in_background (hb_handler c) in
+    let done = ref false in
+    let hb = Async.run_in_background (hb_handler c done) in
 
-    let rec main_loop c =
+    let rec main_loop c done =
       let netid = ref "" in
       let timeout = ref -1 in
       let commands = ref [] in
@@ -105,7 +108,7 @@ module ClientImpl : Client = struct
                   let results = run_tests (!netid) (!files) (!commands) in
                   let res_mes = TestCompletion (!netid, results) in
                   let ack = ReqCtxt.send res_mes c.return) in
-                  main_loop c
+                  if (!done) then () else main_loop c done
     in main_loop c
 
   let close c =
