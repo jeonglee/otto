@@ -60,29 +60,51 @@ module ClientImpl : Client = struct
     let sum = List.fold_left (+) 0 exit_codes in
     if sum = 0 then () else failwith "failed to execute pulled commands"
 
-  let make_test_dir netid files =
+  let rec convert_files files =
     failwith "unimplemented"
-    (* TODO *)
-    (* make a directory named netid containing files *)
-    (* change into that directory *)
+    (* TODO: takes in FileCrawler.files and turns them into
+     * actual files in the current working directory *)
 
+  (* Helper to make a new directory named netid containing all needed files *)
+  let make_test_dir netid files =
+    mkdir netid Oo770; (* not sure about the permissions *)
+    chdir netid;
+    convert_files files;
+    ()
+
+  (* Helper to extract all lines from an open in_channel *)
+  let rec get_results channel acc =
+    try
+      let new_acc = acc ^ (read_line channel) in
+      get_results channel new_acc
+    with
+      | _ -> acc
+
+  (* Helper to set up and run tests for a given assignment *)
   let run_tests netid files commands =
-    (* flush stdout before we begin *)
     let old = Unix.dup Unix.stdout in
     let new_out = open_out netid in
     Unix.dup2 (Unix.descr_of_out_channel new_out) Unix.stdout;
+    let cur = getcwd () in
     make_test_dir netid files;
     execute (!commands);
-    (* return string containing stdout *)
-    (* currently, this is in a file called netid *)
-    (* so return the contents of netid *)
+    chdir cur;
+    let results_in = open_in netid in
+    let results = get_results results_in "" in
+    close_in results_in;
     flush stdout;
     Unix.dup2 old Unix.stdout;
+    results
+
+  let timeout t (u : unit) = failwith "unimplemented"
+  (* TODO: helper function to implement timing out *)
+  (* This should be run in its own thread during execute *)
+  (* The thread should then be killed at the end of execute *)
 
   (* TODO: helper function for receiving and responding to heartbeats *)
   (* This will also be responsible for checking when grading is done *)
   (* When it is, it should set the value at [done] to true *)
-  let hb_handler c done (u: unit) =
+  let hb_handler c done (u : unit) =
     failwith "unimplemented"
 
   let main c =
@@ -109,7 +131,7 @@ module ClientImpl : Client = struct
                   let res_mes = TestCompletion (!netid, results) in
                   let ack = ReqCtxt.send res_mes c.return) in
                   if (!done) then () else main_loop c done
-    in main_loop c
+    in main_loop c false
 
   let close c =
     let s = SubCtxt.close c.sub in
