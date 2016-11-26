@@ -61,14 +61,33 @@ module ClientImpl : Client = struct
     if sum = 0 then () else failwith "failed to execute pulled commands"
 
   let main c =
-    let netid = ref "" in
-    let timeout = ref -1 in
-    let commands = ref [] in
-    let do_on_pull = function
-      | TestSpec(key,t,cmds) -> netid:=key; timeout:=t; commands:=cmds
-      | _ -> raise Comm.Invalid_ctxt
-    in PullCtxt.connect do_on_pull c.pull
-    (*---------- everything for pull up to here ----------*)
+    (* set up a thread running the heartbeat check function *)
+
+    let rec main_loop c =
+      (*let () = flush stdout in*)
+      let netid = ref "" in
+      let timeout = ref -1 in
+      let commands = ref [] in
+      let do_on_pull m = match (Message.unmarshal m) with
+        | TestSpec(key,t,cmds) -> netid:=key; timeout:=t; commands:=cmds
+        | _ -> raise Comm.Invalid_ctxt
+      in
+      let () = PullCtxt.connect do_on_pull c.pull in
+      (*---------- everything for pull up to here ----------*)
+      let files = ref [] in
+      let req_mes = FileReq (!netid) in
+      match (unmarshal (ReqCtxt.send req_mes c.file_req)) with
+      | Err e ->  Err e
+      | Ok f  ->  files := f;
+                  execute (!commands);
+                  (* write stdout to a file and send it back *)
+                  (* send results back by making a TestCompletion record *)
+                  (*  and calling ReqCtxt.send and c.file_req *)
+                  (* loop/recurse *)
+                  main_loop c
+    in main_loop c
+
+
 
   let close c =
     let s = SubCtxt.close c.sub in
