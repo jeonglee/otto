@@ -53,7 +53,15 @@ module ClientImpl : Client = struct
     } in
     o
 
+  (* do on pull:
+  {"key":"<netid>","timeout":<seconds as integer>,"commands":["<shell commands to execute>", ...]} *)
+  let do_on_pull (m : Message.mes) : unit =
+    match m with
+    | TestSpec(key,timeout,command) -> ()
+    | _ -> Comm.Invalid_ctxt
+
   let main c = failwith "unimplemented"
+    (* let () = PullCtxt.connect do_on_pull c.pull in *)
 
   let close c =
     let s = SubCtxt.close c.sub in
@@ -75,4 +83,3 @@ module ClientImpl : Client = struct
 
 
 end
-
