@@ -60,12 +60,24 @@ module ClientImpl : Client = struct
     let sum = List.fold_left (+) 0 exit_codes in
     if sum = 0 then () else failwith "failed to execute pulled commands"
 
-  let run_tests netid files commands =
-    (* flush stdout before we begin *)
+  let make_test_dir netid files =
+    failwith "unimplemented"
+    (* TODO *)
     (* make a directory named netid containing files *)
     (* change into that directory *)
-    (* execute (!commands) *)
+
+  let run_tests netid files commands =
+    (* flush stdout before we begin *)
+    let old = Unix.dup Unix.stdout in
+    let new_out = open_out netid in
+    Unix.dup2 (Unix.descr_of_out_channel new_out) Unix.stdout;
+    make_test_dir netid files;
+    execute (!commands);
     (* return string containing stdout *)
+    (* currently, this is in a file called netid *)
+    (* so return the contents of netid *)
+    flush stdout;
+    Unix.dup2 old Unix.stdout;
 
   let main c =
     (* set up a thread running the heartbeat check function *)
@@ -85,7 +97,7 @@ module ClientImpl : Client = struct
       match (unmarshal (ReqCtxt.send req_mes c.file_req)) with
       | Err e ->  Err e
       | Ok f  ->  files := f;
-                  execute (!commands);
+                  let results = run_tests (!netid) (!files) (!commands) in
                   (* call run_tests *)
                   (* send results back by making a TestCompletion record *)
                   (*  and calling ReqCtxt.send and c.file_req *)
