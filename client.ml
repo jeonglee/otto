@@ -63,8 +63,9 @@ module ClientImpl : Client = struct
   let main c =
     let netid = ref "" in
     let timeout = ref -1 in
+    let commands = ref [] in
     let do_on_pull = function
-      | TestSpec(key,t,cmds) -> netid:=key; timeout:=t; execute cmds
+      | TestSpec(key,t,cmds) -> netid:=key; timeout:=t; commands:=cmds
       | _ -> raise Comm.Invalid_ctxt
     in PullCtxt.connect do_on_pull c.pull
     (*---------- everything for pull up to here ----------*)
