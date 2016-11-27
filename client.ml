@@ -27,13 +27,13 @@ end
 module ClientImpl : Client = struct
   type t = {
     remote_port : int;
-    remote_ip : Message.ip;
-    test_dir : string;
-    sub : SubCtxt.t;          (* For subscribing to the heartbeat *)
-    hb_resp : RespCtxt.t;     (* For responding to the heartbeat *)
-    pull : PullCtxt.t;        (* For pulling tests *)
-    file_req : ReqCtxt.t;     (* For getting files to grade *)
-    return : ReqCtxt.t        (* For returning graded results *)
+    remote_ip   : Message.ip;
+    test_dir    : string;
+    sub         : [> `Req] SubCtxt.t;    (* For subscribing to the heartbeat *)
+    hb_resp     : [> `Rep] RespCtxt.t;   (* For responding to the heartbeat *)
+    pull        : [> `Pull] PullCtxt.t;  (* For pulling tests *)
+    file_req    : [> `Req] ReqCtxt.t;    (* For getting files to grade *)
+    return      : [> `Req] ReqCtxt.t     (* For returning graded results *)
   }
 
   let make conf =
@@ -61,13 +61,16 @@ module ClientImpl : Client = struct
     if sum = 0 then () else failwith "failed to execute pulled commands"
 
   let rec convert_files files =
-    failwith "unimplemented"
+    let errables = List.map FileCrawler.write_file files in
+    let results  = List.map (?!) errables in
+    ()
     (* TODO: takes in FileCrawler.files and turns them into
      * actual files in the current working directory *)
 
   (* Helper to make a new directory named netid containing all needed files *)
   let make_test_dir netid files =
-    mkdir netid Oo770; (* not sure about the permissions *)
+    let open Unix in
+    mkdir netid 0o770; (* not sure about the permissions *)
     chdir netid;
     convert_files files;
     ()
@@ -75,7 +78,7 @@ module ClientImpl : Client = struct
   (* Helper to extract all lines from an open in_channel *)
   let rec get_results channel acc =
     try
-      let new_acc = acc ^ (read_line channel) in
+      let new_acc = acc ^ (input_line channel) in
       get_results channel new_acc
     with
       | _ -> acc
@@ -85,10 +88,10 @@ module ClientImpl : Client = struct
     let old = Unix.dup Unix.stdout in
     let new_out = open_out netid in
     Unix.dup2 (Unix.descr_of_out_channel new_out) Unix.stdout;
-    let cur = getcwd () in
+    let cur = Unix.getcwd () in
     make_test_dir netid files;
-    execute (!commands);
-    chdir cur;
+    execute commands;
+    Unix.chdir cur;
     let results_in = open_in netid in
     let results = get_results results_in "" in
     close_in results_in;
@@ -103,20 +106,21 @@ module ClientImpl : Client = struct
 
   (* TODO: helper function for receiving and responding to heartbeats *)
   (* This will also be responsible for checking when grading is done *)
-  (* When it is, it should set the value at [done] to true *)
-  let hb_handler c done (u : unit) =
+  (* When it is, it should set the value at [finished] to true *)
+  let hb_handler c finished (u : unit) =
     failwith "unimplemented"
 
   let main c =
     (* TODO: set up a thread running the heartbeat check function *)
-    let done = ref false in
-    let hb = Async.run_in_background (hb_handler c done) in
+    let finished = ref false in
+    let hb = Async.run_in_background (hb_handler c finished) in
 
-    let rec main_loop c done =
+    let rec main_loop c finished =
+      let open Message in
       let netid = ref "" in
-      let timeout = ref -1 in
+      let timeout = ref (-1) in
       let commands = ref [] in
-      let do_on_pull m = match (Message.unmarshal m) with
+      let do_on_pull = function
         | TestSpec(key,t,cmds) -> netid:=key; timeout:=t; commands:=cmds
         | _ -> raise Comm.Invalid_ctxt
       in
@@ -124,14 +128,15 @@ module ClientImpl : Client = struct
       (*---------- everything for pull up to here ----------*)
       let files = ref [] in
       let req_mes = FileReq (!netid) in
-      match (Message.unmarshal (ReqCtxt.send req_mes c.file_req)) with
+      match ReqCtxt.send req_mes c.file_req with
       | Err e ->  Err e
-      | Ok f  ->  files := f;
-                  let results = run_tests (!netid) (!files) (!commands) in
-                  let res_mes = TestCompletion (!netid, results) in
-                  let ack = ReqCtxt.send res_mes c.return) in
-                  if (!done) then () else main_loop c done
-    in main_loop c false
+      | Ok (Files f) -> files := f;
+                        let results = run_tests (!netid) (!files) (!commands) in
+                        let res_mes = TestCompletion (!netid, results) in
+                        let ack = ReqCtxt.send res_mes c.return in
+                        if !finished then Ok () else main_loop c finished
+      | Ok _ -> failwith "unexpected response"
+    in main_loop c finished
 
   let close c =
     let s = SubCtxt.close c.sub in
