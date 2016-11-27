@@ -61,3 +61,47 @@ module Once : ONCE = struct
     ) (fun () -> Mutex.unlock (o.lock))
 
 end
+
+module Maybe : (Monad with type 'a t = 'a option) = struct
+  type 'a t = 'a option
+
+  let return x = Some x
+
+  let bind x f =
+    match x with
+    | Some x -> f x
+    | None -> None
+
+  let fmap x f =
+    bind x (fun y -> Some (f y))
+
+  let join = function
+    | Some x -> x
+    | None -> None
+
+  let coerce = function
+    | Some x -> x
+    | None -> failwith "option did not contain value"
+
+  let (>>=) = bind
+  let (>>>) = fmap
+  let (?!) = coerce
+end
+
+let read_all_lines filename =
+  let c = open_in filename in
+  let rec read_lines lines ch =
+    try
+      read_lines ((input_line ch)::lines) ch
+    with
+    | End_of_file -> List.rev lines
+  in
+  let o = read_lines [] c in
+  close_in_noerr c;
+  o
+
+let remove_extension fname =
+  let parts = Str.split (Str.regexp ".") fname in
+  match parts with
+  | [] -> ""
+  | h::t -> h

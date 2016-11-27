@@ -1,5 +1,9 @@
 val try_finally : (unit -> 'a) -> (unit -> unit) -> 'a
 
+val read_all_lines : string -> string list
+
+val remove_extension : string -> string
+
 module type Monad = sig
   type 'a t
   val return : 'a -> 'a t
@@ -23,3 +27,5 @@ module type ONCE = sig
 end
 
 module Once : ONCE
+
+module Maybe : Monad with type 'a t = 'a option

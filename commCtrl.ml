@@ -38,6 +38,8 @@ module type Commander = sig
     (Message.test_key -> unit) -> 'a t -> 'a t
   val set_client_timeout_callback :
     (Message.ip -> unit) -> 'a t -> 'a t
+  val set_client_connected_callback :
+    (Message.ip -> unit) -> 'a t -> 'a t
 
 
 end
@@ -129,7 +131,6 @@ module CommanderImpl : Commander = struct
 
     live_bots : IPTimeMap.t;
 
-    attempts_lock : Mutex.t;
     attempts : int StrMap.t ref;
 
     assignment_lock : Mutex.t;
@@ -137,10 +138,12 @@ module CommanderImpl : Commander = struct
     not_assigned : StrSet.t ref;
 
     write_lock : Mutex.t;
+    commands : command list;
 
     on_success : test_key -> unit;
     on_failure : test_key -> unit;
     on_client_timeout : ip -> unit;
+    on_client_connected : ip -> unit;
   } constraint 'a = [> `Pub | `Push |`Rep]
 
   let wait_for_completion c =
@@ -150,7 +153,12 @@ module CommanderImpl : Commander = struct
     done;
     Mutex.unlock (c.compl_lock)
 
-  let fin t = StrSet.cardinal !(t.finished) = t.total_assignments
+  let failed_tests t =
+    (StrMap.filter (fun _ a -> a = 3) !(t.attempts))
+
+  let fin t =
+    let failed = List.length (StrMap.bindings (failed_tests t)) in
+    (StrSet.cardinal !(t.finished)) + failed >= t.total_assignments
 
   let new_heartbeat don =
     Heartbeat (Unix.time (), don)
@@ -186,6 +194,9 @@ module CommanderImpl : Commander = struct
   let set_client_timeout_callback c t =
     {t with on_client_timeout = c}
 
+  let set_client_connected_callback c t =
+    {t with on_client_connected = c}
+
   let serve_heartbeat c () =
     while !(c.die) do
       let timeout = (float_of_int c.conf.client_timeout) in
@@ -194,17 +205,102 @@ module CommanderImpl : Commander = struct
       Thread.delay (timeout);
     done
 
+  (* Not thread-safe *)
+  let get_next_assignment c =
+    let free_assignments = !(c.not_assigned) in
+    if StrSet.cardinal free_assignments > 0
+    then (Some (StrSet.choose free_assignments))
+    else None
+
+  let alarm_thread c assignment () =
+    Thread.delay (float_of_int c.conf.client_timeout);
+    Mutex.lock c.assignment_lock;
+    let f = !(c.finished) in
+    if StrSet.mem assignment f
+    then
+      begin
+        c.not_assigned := StrSet.add assignment (!(c.not_assigned));
+        let attempts_made = StrMap.find assignment (!(c.attempts)) in
+        c.attempts := StrMap.add assignment (attempts_made+1) (!(c.attempts));
+        c.on_failure assignment
+      end;
+    Mutex.unlock c.assignment_lock
+
+  let make_test_spec key c =
+    TestSpec (key,c.conf.test_timeout,c.commands)
+
   let serve_pusher c () =
-    failwith "Unimplemented"
+    let open Util.Maybe in
+    while !(c.die) do
+      Mutex.lock c.assignment_lock;
+      let a = get_next_assignment c
+      >>= (fun a ->
+            c.not_assigned := StrSet.remove a !(c.not_assigned);
+            let attempts_made = StrMap.find a (!(c.attempts)) in
+            if attempts_made >= 3 then None else return a)
+      in
+      Mutex.unlock c.assignment_lock;
+      a >>=
+      (fun key ->
+         PushCtxt.push (make_test_spec key c) c.test_push;
+         return (!-> (alarm_thread c key))
+      ) |> ignore
+    done
 
   let serve_heartbeat_response c () =
-    failwith "Unimplemented"
+    let respond m rf =
+      let open Util.Maybe in
+      (match m with
+       | HeartbeatResp ip -> rf (Files []); return ip
+       | _ -> None)
+      >>> (fun x ->
+          IPTimeMap.add_ip ~callback:(c.on_client_connected) x c.live_bots)
+      |> ignore
+    in
+    RespCtxt.serve respond c.hb_serv
 
   let serve_results c () =
-    failwith "Unimplemented"
+    let respond m rf =
+      Mutex.lock c.assignment_lock;
+      let open Util.Maybe in
+      (match m with
+       | Files (res_dat::[]) -> rf (Files []); return res_dat
+       | _ -> None)
+      >>> (fun result_data ->
+          (* TODO: Ensure the client is calling the result file something
+             appropriate *)
+          ignore (FileCrawler.write_file ~dir:("./results") result_data);
+          let key = Filename.basename (fst result_data)
+                    |> Util.remove_extension in
+          c.not_assigned := StrSet.remove key (!(c.not_assigned));
+          c.finished := StrSet.add key (!(c.finished));
+          if fin c then c.completed := true;
+        )
+      |> ignore;
+      Mutex.unlock c.assignment_lock;
+    in
+    RespCtxt.serve respond c.result_serv
 
   let serve_files c () =
-    failwith "Unimplemented"
+    let respond m rf =
+      let files =
+        try
+          (let open Util.Maybe in
+          (match m with
+           | FileReq (key) -> rf (Files []); return key
+           | _ -> None)
+          >>> (fun key -> FileCrawler.files_from_dir (c.conf.test_dir ^ key))
+          |> coerce)
+        with
+        | e -> Err e
+      in
+      let open Errable.M in
+      files
+      >>> (fun f -> Files (f))
+      >>> rf
+      |> ignore
+    in
+    RespCtxt.serve respond c.file_serv
 
   let main c =
     try
@@ -236,6 +332,9 @@ module CommanderImpl : Commander = struct
           (fun acc key -> StrSet.add key acc) StrSet.empty subdirs in
       return (attempts, not_assigned)
 
+  let load_commands com_file =
+    Util.read_all_lines com_file
+
   let make conf =
     let open Errable.M in
     let c = {
@@ -245,10 +344,10 @@ module CommanderImpl : Commander = struct
     completed_cond = Condition.create ();
     completed = ref false;
     hb_pub = PubCtxt.make {port=conf.base_port};
-    test_push = PushCtxt.make {port=conf.base_port};
-    file_serv = RespCtxt.make {port=conf.base_port};
-    result_serv = RespCtxt.make {port=conf.base_port};
-    hb_serv = RespCtxt.make {port=conf.base_port};
+    test_push = PushCtxt.make {port=conf.base_port+1};
+    file_serv = RespCtxt.make {port=conf.base_port+2};
+    result_serv = RespCtxt.make {port=conf.base_port+3};
+    hb_serv = RespCtxt.make {port=conf.base_port+4};
 
     hb_thread = Once.make ();
     hbres_thread = Once.make ();
@@ -263,7 +362,6 @@ module CommanderImpl : Commander = struct
     total_assignments = -1;
     live_bots = IPTimeMap.empty ();
 
-    attempts_lock = Mutex.create ();
     attempts = ref (StrMap.empty);
 
     assignment_lock = Mutex.create ();
@@ -275,11 +373,13 @@ module CommanderImpl : Commander = struct
     on_success = default_callback;
     on_failure = default_callback;
     on_client_timeout = default_callback;
+    on_client_connected = default_callback;
+    commands = load_commands (conf.command_file);
     } in
     initial_tests (conf.test_dir)
     >>= (fun (a,n) ->
         c.attempts := a;
         c.not_assigned := n;
-        return c)
+        return {c with total_assignments = StrSet.cardinal n})
 
 end

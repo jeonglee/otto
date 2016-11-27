@@ -34,6 +34,8 @@ module type Commander = sig
     (Message.test_key -> unit) -> 'a t -> 'a t
   val set_client_timeout_callback :
     (Message.ip -> unit) -> 'a t -> 'a t
+  val set_client_connected_callback :
+    (Message.ip -> unit) -> 'a t -> 'a t
 
 
 end
