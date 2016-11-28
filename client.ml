@@ -49,7 +49,7 @@ module ClientImpl : Client = struct
   } constraint 'a = [> `Req | `Sub | `Pull ]
 
   let get_ip =
-    try (Ok (Unix.open_process_in "curl \"https://api.ipify.org\" 2>/dev/null"
+    try (Ok (Unix.open_process_in "curl -s \"https://api.ipify.org\" 2>/dev/null"
       |> input_line))
     with
     | End_of_file -> Err End_of_file
@@ -70,12 +70,12 @@ module ClientImpl : Client = struct
     in
     SubCtxt.connect check_if_done c.sub;
     let unpack_ip packed = match packed with
-    | Ok ip -> ip
-    | Err e -> raise e in
+      | Ok ip -> ip
+      | Err e -> raise e in
     let req = HeartbeatResp (unpack_ip get_ip) in
     match (ReqCtxt.send req c.hb_resp) with
-    | Ok _ -> ()
-    | Err e -> raise e
+      | Ok _ -> ()
+      | Err e -> raise e
 
   let make conf =
     try
