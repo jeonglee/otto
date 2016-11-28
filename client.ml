@@ -45,10 +45,6 @@ module ClientImpl : Client = struct
     pull        : 'a PullCtxt.t;   (* For pulling tests *)
     file_req    : 'a ReqCtxt.t;    (* For getting files to grade *)
     return      : 'a ReqCtxt.t;    (* For returning graded results *)
-    (* Add a thread for dealing with heartbeat *)
-    (* Add a thread for dealing with timeout *)
-    (* Add a mutex for accessing the DONE field *)
-    (* Add the DONE field *)
     finished    : bool ref;
     fin_lock    : Mutex.t;
     hb_thread   : Thread.t Once.t;
@@ -105,17 +101,8 @@ module ClientImpl : Client = struct
         hb_thread   = Once.make ();
       } in
       Once.set (!-> (hb_handler o)) o.hb_thread;
-      Ok o (*!!!!!! Do some checking here - just did Ok to make it compile for now !!!!!!!! *)
+      Ok o
     with e -> Err e
-
-  (* execute pulled commands and returns unit if successful, and raises failure
-   * otherwise. A command execution is 'successful' if its exit code is 0 *)
-  let execute commands =
-
-    let exit_codes = List.map Sys.command commands in
-    let sum = List.fold_left (+) 0 exit_codes in
-    if sum = 0 then () else failwith "failed to execute pulled commands"
-
 
   (* Takes in FileCrawler.files and turns them into
    * actual files in the current working directory *)
@@ -139,24 +126,40 @@ module ClientImpl : Client = struct
     with
       | _ -> acc
 
+  (* execute pulled commands and returns unit if successful, and raises failure
+   * otherwise. A command execution is 'successful' if its exit code is 0 *)
+  let rec execute commands timeout inp outp =
+    | h::t ->
+        let (p, args) = match h with
+        | hd::tl -> (hd, Array.of_list tl)
+        | [] -> ("", [||])
+        in
+        let pid = ref None in
+        alarm_handler timeout pid;
+        pid := Some (Unix.create_process p args inp outp outp);
+        match !pid with
+        | None -> ()
+        | Some x -> begin
+                      match waitpid [] x with
+                      | (_, WEXITED) -> pid := None; ()
+                      | _ -> ()
+    | [] -> ()
+
   (* Helper to set up and run tests for a given assignment *)
   let run_tests netid files commands =
-    let old = Unix.dup Unix.stdout in
-    let new_out = open_out netid in
-    Unix.dup2 (Unix.descr_of_out_channel new_out) Unix.stdout;
     let cur = Unix.getcwd () in
     make_test_dir netid files;
-    execute commands;
+    let pipe = Unix.pipe () in
+    execute commands (fst pipe) (snd pipe);
     Unix.chdir cur;
-    let results_in = open_in netid in
+    let results_in = Unix.in_channel_of_descr (snd pipe) in
     let results = get_results results_in "" in
     close_in results_in;
-    flush stdout;
-    Unix.dup2 old Unix.stdout;
     results
 
   let main c =
     let rec main_loop (c : 'a t) =
+      if !(c.finished) then Ok () else
       let open Message in
       let netid = ref "" in
       let timeout = ref (-1) in
@@ -174,9 +177,8 @@ module ClientImpl : Client = struct
                         let results = run_tests (!netid) (!files) (!commands) in
                         let res_mes = TestCompletion (!netid, results) in
                         let _ = ReqCtxt.send res_mes c.return in
-                        if !(c.finished) then Ok ()
-                        else main_loop c
-      | Ok _ -> failwith "unexpected response"
+                        main_loop c
+      | Ok _ -> Err (Failure "unexpected response")
     in main_loop c
 
   let close c =
