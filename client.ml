@@ -106,17 +106,9 @@ module ClientImpl : Client = struct
 
   (* Takes in FileCrawler.files and turns them into
    * actual files in the current working directory *)
-  let rec convert_files files =
-    let errables = List.map FileCrawler.write_file files in
+  let rec convert_files netid files =
+    let errables = List.map (FileCrawler.write_file ~dir:netid) files in
     List.iter (?!) errables
-
-  (* Helper to make a new directory named netid containing all needed files *)
-  let make_test_dir netid files =
-    let open Unix in
-    mkdir netid 0o770; (* not sure about the permissions *)
-    chdir netid;
-    convert_files files;
-    ()
 
   (* Helper to extract all lines from an open in_channel *)
   let rec get_results channel acc =
@@ -158,14 +150,14 @@ module ClientImpl : Client = struct
   (* Helper to set up and run tests for a given assignment *)
   let run_tests netid timeout files commands =
     let cur = Unix.getcwd () in
-    make_test_dir netid files;
+    convert_files netid files;
     let (read,write) = Unix.pipe () in
     execute commands (float_of_int timeout) Unix.stdin write;
     Unix.chdir cur;
     let results_in = Unix.in_channel_of_descr (read) in
     let results = get_results results_in "" in
     close_in results_in;
-    results
+    B64.encode results
 
   let main c =
     let rec main_loop (c : 'a t) =
