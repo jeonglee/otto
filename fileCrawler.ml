@@ -5,6 +5,8 @@ open Errable.M
 
 type file = string * string
 
+(* [file_to_string f] returns the contents of the file [f] as a string
+ * requires: [f] is a valid file path *)
 let file_to_string f =
   let in_channel = open_in f in
   let len = in_channel_length in_channel in
@@ -13,6 +15,7 @@ let file_to_string f =
   close_in in_channel;
   s |> Bytes.to_string |> B64.encode
 
+(* see Filename.dir_sep *)
 let slash = Filename.dir_sep
 
 (* let rec construct_file_list handle file dir =
@@ -47,11 +50,17 @@ let rec construct_file_list dir lst h =
               | None -> construct_file_list dir lst h
               | Some content -> construct_file_list dir ((name,content)::lst) h
 
+(* [files_from_dir dir] attempts to open a handle on the directory [dir] and
+ * uses it to construct a file list using construct_file_list *)
 let files_from_dir dir =
   let handle = try Ok (opendir dir) with Unix_error(_,_,_) -> Err Not_found in
   handle >>> (construct_file_list dir [])
 
-
+(* [write_file ?dir (name,contents)] writes to the specified file in the given
+ * directory [dir]. If the file specified does not exist, it is created. If the
+ * directory specified does not exist, it is created.
+ * requires:
+ * [contents] is a string encoded in base64*)
 let write_file ?dir:(d=".") (name,contents) =
   let path = d ^ slash ^ name  in
   let dirname = Filename.dirname path in
