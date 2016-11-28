@@ -5,6 +5,9 @@
 
 OPAM:
 * zmq=4.0-7
+* base64
+
+curl
 
 Ubuntu:
 * libzmq3-dev
