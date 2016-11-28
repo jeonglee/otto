@@ -141,14 +141,8 @@ let clean_conn c =
   Sock.close c.sock;
   cleanup c.ctxt
 
-let try_finally (f : unit -> unit) (final : unit -> unit) =
-  try
-    f ();
-    final ()
-  with
-  | e -> final (); raise e
-
 open Unix
+open Util
 
 module ReqCtxt : RequesterContext = struct
   type 'a t = {
@@ -164,9 +158,11 @@ module ReqCtxt : RequesterContext = struct
       hostname = conf.remote_ip;
       conn = make_conn Sock.req;
     } in
+    Util.debug_endline "Creating req ctxt";
     Sock.connect o.conn.sock (make_conn_str o.hostname o.port);
     Sock.set_send_timeout o.conn.sock five_seconds;
     Sock.set_receive_timeout o.conn.sock five_seconds;
+    Util.debug_endline "Created req context";
     o
 
   let close (c : [>`Req] t) =
@@ -197,9 +193,11 @@ module RespCtxt : ResponderContext = struct
       die = ref false;
       die_lock = Mutex.create ();
     } in
+    Util.debug_endline "Creating resp ctxt";
     Sock.bind o.conn.sock (make_bind_str conf.port);
     Sock.set_send_timeout o.conn.sock five_seconds;
     Sock.set_receive_timeout o.conn.sock five_seconds;
+    Util.debug_endline "Created resp context";
     o
 
   let close (c : [>`Rep] t) =
@@ -244,8 +242,10 @@ module PubCtxt : PublisherContext = struct
       port = conf.port;
       conn = make_conn Sock.pub;
     } in
+    Util.debug_endline "Creating pub ctxt";
     Sock.bind o.conn.sock (make_bind_str conf.port);
     Sock.set_send_timeout o.conn.sock five_seconds;
+    Util.debug_endline "Created pub context";
     o
 
   let send m t =
@@ -278,9 +278,11 @@ module SubCtxt : SubscriberContext = struct
       die = ref false;
       die_lock = Mutex.create ();
     } in
+    Util.debug_endline "Creating sub ctxt";
     Sock.connect o.conn.sock (make_conn_str o.hostname o.port);
     Sock.subscribe o.conn.sock "";
     Sock.set_receive_timeout o.conn.sock five_seconds;
+    Util.debug_endline "Created sub context";
     o
 
   let close c =
@@ -323,13 +325,14 @@ module PushCtxt : PusherContext = struct
       port = c.port;
       conn = make_conn Sock.push;
     } in
-    Sock.connect o.conn.sock (make_bind_str o.port);
+    Util.debug_endline "Creating push ctxt";
+    Sock.bind o.conn.sock (make_bind_str o.port);
     Sock.set_send_timeout o.conn.sock five_seconds;
-    Sock.set_receive_timeout o.conn.sock five_seconds;
+    Util.debug_endline "Created push context";
     o
 
   let push (m : Message.mes) (t: 'a t) =
-    print_endline "Sent";
+    Util.debug_endline "Sent";
     Sock.send t.conn.sock (Message.marshal m)
 
   let close t =
@@ -355,9 +358,11 @@ module PullCtxt : PullerContext = struct
       die = ref false;
       die_lock = Mutex.create ();
     } in
+    Util.debug_endline "Creating pull ctxt";
     Sock.connect o.conn.sock (make_conn_str o.hostname o.port);
     Sock.set_send_timeout o.conn.sock five_seconds;
     Sock.set_receive_timeout o.conn.sock five_seconds;
+    Util.debug_endline "Created pull ctxt";
     o
 
   let close (c: [> `Pull] t) =

@@ -10,3 +10,5 @@ val files_from_dir : string -> file list errable
 
 (* writes a file to disk, using the file name as the location to write to *)
 val write_file : ?dir:string -> file -> unit errable
+
+val subdirectories : string -> string list errable

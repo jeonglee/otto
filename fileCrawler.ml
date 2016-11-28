@@ -1,6 +1,7 @@
 open Unix
 open Str
 open Errable
+open Errable.M
 
 type file = string * string
 
@@ -53,6 +54,18 @@ let files_from_dir dir =
 
 let write_file ?dir:(d=".") (name,contents) =
   let path = d ^ slash ^ name  in
+  let dirname = Filename.dirname path in
+  let _ = Sys.command ("mkdir -p " ^ dirname) in
   let out_channel = open_out path in
-  let _ = output_string out_channel contents in
+  output_string out_channel (B64.decode contents);
   try (Ok (close_out out_channel)) with (Sys_error err) -> Err (Sys_error err)
+
+let subdirectories path =
+  try
+    let files = Sys.readdir path |> Array.to_list in
+    List.filter (fun f ->
+        path ^ Filename.dir_sep ^ f
+        |> Sys.is_directory) files
+    |> return
+  with
+  | e -> Err e
