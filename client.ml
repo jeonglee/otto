@@ -112,15 +112,15 @@ module ClientImpl : Client = struct
   (* This will also be responsible for checking when grading is done *)
   (* When it is, it should set the value at [finished] to true *)
   let hb_handler c finished (u : unit) =
-    let hb = Message.unmarshal c.sub in
+    let open Message in
     let check_if_done m =
       match m with
-      | HeartBeat(time,d) when d = true -> done := true
+      | Heartbeat(time,d) when (d = true) -> finished:=true;
       | _ -> raise Comm.Invalid_ctxt
     in
-    let _ = check_if_done hb in
-    let req = HeartbeatResp("ip here") |> Message.marshal in
-    match (Message.unmarshal (ReqCtxt.send req c.return)) with
+    SubCtxt.connect check_if_done c.sub;
+    let req = HeartbeatResp("ip here") in
+    match (ReqCtxt.send req c.hb_resp) with
     | Ok _ -> ()
     | Err e -> raise e
 
