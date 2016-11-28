@@ -28,7 +28,7 @@ module type Client = sig
 
 end
 
-let alarm_handler (delay : float) (pid : int option ref) : unit =
+let alarm_handler (delay : float) (pid : int option ref) () : unit =
   Thread.delay delay;
   match !pid with
   | Some pid -> Unix.kill pid Sys.sigkill
@@ -128,31 +128,41 @@ module ClientImpl : Client = struct
 
   (* execute pulled commands and returns unit if successful, and raises failure
    * otherwise. A command execution is 'successful' if its exit code is 0 *)
-  let rec execute commands timeout inp outp =
-    | h::t ->
-        let (p, args) = match h with
-        | hd::tl -> (hd, Array.of_list tl)
-        | [] -> ("", [||])
-        in
-        let pid = ref None in
-        alarm_handler timeout pid;
-        pid := Some (Unix.create_process p args inp outp outp);
-        match !pid with
-        | None -> ()
-        | Some x -> begin
-                      match waitpid [] x with
-                      | (_, WEXITED) -> pid := None; ()
-                      | _ -> ()
-    | [] -> ()
+  let execute commands timeout inp outp =
+    let pid_ref = ref None in
+    let _ = (!-> (alarm_handler timeout pid_ref)) in
+    let rec exec = function
+      | [] -> ()
+      | h::t ->
+          match split_whitespace h with
+          | [] -> exec t
+          | h::a ->
+              begin
+                let (p,args) = h, (Array.of_list a) in
+                let pid = Unix.create_process p args inp outp outp in
+                pid_ref := Some pid;
+                let res =
+                  match Unix.waitpid [] pid with
+                  | (_, Unix.WEXITED i) -> i
+                  | (_, Unix.WSIGNALED i) -> i
+                  | (_, Unix.WSTOPPED i) -> i in
+                pid_ref := None;
+                if res != 0
+                then ()
+                else exec a
+              end
+    in
+    exec commands
+
 
   (* Helper to set up and run tests for a given assignment *)
-  let run_tests netid files commands =
+  let run_tests netid timeout files commands =
     let cur = Unix.getcwd () in
     make_test_dir netid files;
-    let pipe = Unix.pipe () in
-    execute commands (fst pipe) (snd pipe);
+    let (read,write) = Unix.pipe () in
+    execute commands (float_of_int timeout) Unix.stdin write;
     Unix.chdir cur;
-    let results_in = Unix.in_channel_of_descr (snd pipe) in
+    let results_in = Unix.in_channel_of_descr (read) in
     let results = get_results results_in "" in
     close_in results_in;
     results
@@ -174,10 +184,10 @@ module ClientImpl : Client = struct
       match ReqCtxt.send req_mes c.file_req with
       | Err e ->  Err e
       | Ok (Files f) -> files := f;
-                        let results = run_tests (!netid) (!files) (!commands) in
-                        let res_mes = TestCompletion (!netid, results) in
-                        let _ = ReqCtxt.send res_mes c.return in
-                        main_loop c
+          let results = run_tests (!netid) (!timeout) (!files) (!commands) in
+          let res_mes = TestCompletion (!netid, results) in
+          let _ = ReqCtxt.send res_mes c.return in
+          main_loop c
       | Ok _ -> Err (Failure "unexpected response")
     in main_loop c
 

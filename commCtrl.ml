@@ -281,14 +281,13 @@ module CommanderImpl : Commander = struct
       Mutex.lock c.assignment_lock;
       let open Util.Maybe in
       (match m with
-       | Files (res_dat::[]) -> rf (Files []); return res_dat
+       | TestCompletion (key, res) -> rf (Files []); return (key,B64.encode res)
        | _ -> None)
       >>> (fun result_data ->
           (* TODO: Ensure the client is calling the result file something
              appropriate *)
           ignore (FileCrawler.write_file ~dir:("./results") result_data);
-          let key = Filename.basename (fst result_data)
-                    |> Util.remove_extension in
+          let key = (fst result_data) in
           c.not_assigned := StrSet.remove key (!(c.not_assigned));
           c.finished := StrSet.add key (!(c.finished));
           Mutex.lock c.compl_lock;
