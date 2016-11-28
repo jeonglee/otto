@@ -112,7 +112,17 @@ module ClientImpl : Client = struct
   (* This will also be responsible for checking when grading is done *)
   (* When it is, it should set the value at [finished] to true *)
   let hb_handler c finished (u : unit) =
-    failwith "unimplemented"
+    let hb = Message.unmarshal c.sub in
+    let check_if_done m =
+      match m with
+      | HeartBeat(time,d) when d = true -> done := true
+      | _ -> raise Comm.Invalid_ctxt
+    in
+    let _ = check_if_done hb in
+    let req = HeartbeatResp("ip here") |> Message.marshal in
+    match (Message.unmarshal (ReqCtxt.send req c.return)) with
+    | Ok _ -> ()
+    | Err e -> raise e
 
   let main c =
     (* TODO: set up a thread running the heartbeat check function *)
