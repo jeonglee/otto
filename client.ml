@@ -28,6 +28,12 @@ module type Client = sig
 
 end
 
+let alarm_handler (delay : float) (pid : int option ref) : unit =
+  Thread.delay delay;
+  match !pid with
+  | Some pid -> Unix.kill pid Sys.sigkill
+  | None -> ()
+
 module ClientImpl : Client = struct
   type 'a t = {
     conf        : config;
