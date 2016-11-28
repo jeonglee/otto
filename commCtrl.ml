@@ -57,14 +57,21 @@ module OrdStr : (Set.OrderedType with type t = string) = struct
 end
 
 module IPMap : (Map.S with type key = ip) = Map.Make(OrdIP)
+
+(* A mutable data structure which manages ips and alerts the user to client
+   connections and timeouts *)
 module IPTimeMap = struct
   type t = {
     map : time IPMap.t ref;
     lock : Mutex.t;
   }
 
+  (* Creates a new IPTimeMap *)
   let empty () = {map=ref IPMap.empty;lock=Mutex.create ()}
 
+(* Adds a new entry and calls the given callback function if the connection
+   wasn't previously in the map
+*)
   let add_ip ?callback:(c=(fun ip -> ())) (ip : ip) (t : t) : unit =
     Mutex.lock t.lock;
     let m = !(t.map) in
@@ -73,6 +80,9 @@ module IPTimeMap = struct
     Mutex.unlock t.lock;
     if new_entry then (c ip) else ()
 
+(* Removes old entries from the map, and calls the timeout callback for each
+   entry removed.
+*)
   let cleanup ?callback:(c=(fun ip -> ())) (timeout : time) (t : t) : unit =
     Mutex.lock t.lock;
     let m = !(t.map) in
@@ -85,6 +95,8 @@ module IPTimeMap = struct
     Mutex.unlock t.lock;
     List.iter c old_ips
 
+(* Returns a list of all currently connected ips (that haven't been removed
+   since the last cleanup) *)
   let connected_ips t =
     Mutex.lock t.lock;
     let m = !(t.map) in
@@ -97,6 +109,7 @@ end
 module StrSet : (Set.S with type elt = string) = Set.Make(OrdStr)
 module StrMap : (Map.S with type key = string) = Map.Make(OrdStr)
 
+(* A default no-op callback *)
 let default_callback _ = ()
 
 module CommanderImpl : Commander = struct
@@ -240,6 +253,10 @@ module CommanderImpl : Commander = struct
             if attempts_made >= 3 then None else return a)
       in
       Mutex.unlock c.assignment_lock;
+      Mutex.lock c.compl_lock;
+      if fin c
+      then (c.completed := true; Condition.broadcast c.completed_cond);
+      Mutex.unlock c.compl_lock;
       a >>=
       (fun key ->
          PushCtxt.push (make_test_spec key c) c.test_push;
@@ -274,7 +291,10 @@ module CommanderImpl : Commander = struct
                     |> Util.remove_extension in
           c.not_assigned := StrSet.remove key (!(c.not_assigned));
           c.finished := StrSet.add key (!(c.finished));
-          if fin c then c.completed := true;
+          Mutex.lock c.compl_lock;
+          if fin c
+          then (c.completed := true; Condition.broadcast c.completed_cond);
+          Mutex.unlock c.compl_lock;
         )
       |> ignore;
       Mutex.unlock c.assignment_lock;
@@ -289,7 +309,10 @@ module CommanderImpl : Commander = struct
           (match m with
            | FileReq (key) -> rf (Files []); return key
            | _ -> None)
-          >>> (fun key -> FileCrawler.files_from_dir (c.conf.test_dir ^ key))
+          >>> (fun key ->
+              if key <> "common"
+              then FileCrawler.files_from_dir (c.conf.test_dir ^ key)
+              else FileCrawler.files_from_dir (c.conf.common_dir))
           |> coerce)
         with
         | e -> Err e
@@ -343,8 +366,8 @@ module CommanderImpl : Commander = struct
     compl_lock = Mutex.create ();
     completed_cond = Condition.create ();
     completed = ref false;
-    hb_pub = PubCtxt.make {port=conf.base_port};
     test_push = PushCtxt.make {port=conf.base_port+1};
+    hb_pub = PubCtxt.make {port=conf.base_port};
     file_serv = RespCtxt.make {port=conf.base_port+2};
     result_serv = RespCtxt.make {port=conf.base_port+3};
     hb_serv = RespCtxt.make {port=conf.base_port+4};
@@ -380,6 +403,8 @@ module CommanderImpl : Commander = struct
     >>= (fun (a,n) ->
         c.attempts := a;
         c.not_assigned := n;
+        print_endline
+          ("Grading " ^ (string_of_int (StrSet.cardinal n)) ^ " assignments.");
         return {c with total_assignments = StrSet.cardinal n})
 
 end

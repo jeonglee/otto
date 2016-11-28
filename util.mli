@@ -29,3 +29,6 @@ end
 module Once : ONCE
 
 module Maybe : Monad with type 'a t = 'a option
+
+val set_debug : bool -> unit
+val debug_endline : string -> unit

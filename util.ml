@@ -105,3 +105,12 @@ let remove_extension fname =
   match parts with
   | [] -> ""
   | h::t -> h
+
+let debug = ref false
+
+let set_debug = (:=) debug
+
+let debug_endline s =
+  if !debug
+  then print_endline ("DEBUG: " ^ s)
+  else ()
