@@ -10,34 +10,37 @@ type config = {
 (* Pulls tests from the C&C server, runs them, and responds to the server with
  * a summary of the test results. *)
 module type Client = sig
-  type t
+  type 'a t
+    constraint 'a = [> `Sub | `Pull |`Req]
 
   (* make initializes a new client *)
-  val make : config -> t errable
+  val make : config -> 'a t errable
 
   (* main runs the client until the testing server goes down or
    * broadcasts the fact that there are no more tests to run. *)
-  val main : t -> unit errable
+  val main : 'a t -> unit errable
 
   (* Frees any resources held by a client. *)
-  val close : t -> t
+  val close : 'a t -> 'a t
 
 end
 
 module ClientImpl : Client = struct
-  type t = {
+  type 'a t = {
+    conf        : config;
     remote_port : int;
     remote_ip   : Message.ip;
     test_dir    : string;
-    sub         : [> `Req] SubCtxt.t;    (* For subscribing to the heartbeat *)
-    hb_resp     : [> `Rep] RespCtxt.t;   (* For responding to the heartbeat *)
-    pull        : [> `Pull] PullCtxt.t;  (* For pulling tests *)
-    file_req    : [> `Req] ReqCtxt.t;    (* For getting files to grade *)
-    return      : [> `Req] ReqCtxt.t     (* For returning graded results *)
-  }
+    sub         : 'a SubCtxt.t;    (* For subscribing to the heartbeat *)
+    hb_resp     : 'a ReqCtxt.t;    (* For responding to the heartbeat *)
+    pull        : 'a PullCtxt.t;   (* For pulling tests *)
+    file_req    : 'a ReqCtxt.t;    (* For getting files to grade *)
+    return      : 'a ReqCtxt.t     (* For returning graded results *)
+  } constraint 'a = [> `Req | `Sub | `Pull ]
 
   let make conf =
     let o = {
+      conf        = conf;
       remote_port = conf.remote_port;
       remote_ip   = conf.remote_ip;
       test_dir    = conf.test_dir;
@@ -49,9 +52,11 @@ module ClientImpl : Client = struct
                                   remote_ip = conf.remote_ip};
       return      = ReqCtxt.make {port = conf.remote_port + 3;
                                   remote_ip = conf.remote_ip};
-      hb_resp     = RespCtxt.make {port = conf.remote_port + 4}
+      hb_resp     = ReqCtxt.make {port = conf.remote_port + 4;
+                                  remote_ip = conf.remote_ip};
     } in
-    o
+    Ok o (*!!!!!! Do some checking here - just did Ok to make it compile for now !!!!!!!! *)
+
 
   (* execute pulled commands and returns unit if successful, and raises failure
    * otherwise. A command execution is 'successful' if its exit code is 0 *)
@@ -60,12 +65,11 @@ module ClientImpl : Client = struct
     let sum = List.fold_left (+) 0 exit_codes in
     if sum = 0 then () else failwith "failed to execute pulled commands"
 
+  (* Takes in FileCrawler.files and turns them into
+   * actual files in the current working directory *)
   let rec convert_files files =
     let errables = List.map FileCrawler.write_file files in
-    let results  = List.map (?!) errables in
-    ()
-    (* TODO: takes in FileCrawler.files and turns them into
-     * actual files in the current working directory *)
+    List.iter (?!) errables
 
   (* Helper to make a new directory named netid containing all needed files *)
   let make_test_dir netid files =
@@ -140,11 +144,12 @@ module ClientImpl : Client = struct
 
   let close c =
     let s = SubCtxt.close c.sub in
-    let h = RespCtxt.close c.hb_resp in
+    let h = ReqCtxt.close c.hb_resp in
     let p = PullCtxt.close c.pull in
     let f = ReqCtxt.close c.file_req in
     let r = ReqCtxt.close c.return in
     let o = {
+      conf        = c.conf;
       remote_port = c.remote_port;
       remote_ip   = c.remote_ip;
       test_dir    = c.test_dir;
