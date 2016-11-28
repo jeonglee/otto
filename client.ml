@@ -108,6 +108,13 @@ module ClientImpl : Client = struct
   (* This should be run in its own thread during execute *)
   (* The thread should then be killed at the end of execute *)
 
+
+  let get_ip =
+    try (Ok (Unix.open_process_in "curl \"https://api.ipify.org\" 2>/dev/null"
+      |> input_line))
+    with
+    | End_of_file -> Err End_of_file
+
   (* TODO: helper function for receiving and responding to heartbeats *)
   (* This will also be responsible for checking when grading is done *)
   (* When it is, it should set the value at [finished] to true *)
@@ -119,7 +126,10 @@ module ClientImpl : Client = struct
       | _ -> raise Comm.Invalid_ctxt
     in
     SubCtxt.connect check_if_done c.sub;
-    let req = HeartbeatResp("ip here") in
+    let unpack_ip packed = match packed with
+    | Ok ip -> ip
+    | Err e -> raise e in
+    let req = HeartbeatResp (unpack_ip get_ip) in
     match (ReqCtxt.send req c.hb_resp) with
     | Ok _ -> ()
     | Err e -> raise e
