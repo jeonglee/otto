@@ -100,11 +100,17 @@ let read_all_lines filename =
   close_in_noerr c;
   o
 
-let remove_extension fname =
-  let parts = Str.split (Str.regexp ".") fname in
-  match parts with
-  | [] -> ""
-  | h::t -> h
+let split regex =
+  Str.split (Str.regexp regex)
+
+  let remove_extension fname =
+    let parts = split "\\." fname in
+    match parts with
+    | [] -> ""
+    | h::t -> h
+
+let split_whitespace =
+  split "[ \t\r\n]+"
 
 let debug = ref false
 

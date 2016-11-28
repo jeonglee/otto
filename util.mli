@@ -32,3 +32,6 @@ module Maybe : Monad with type 'a t = 'a option
 
 val set_debug : bool -> unit
 val debug_endline : string -> unit
+
+val split : string -> string -> string list
+val split_whitespace : string -> string list

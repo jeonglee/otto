@@ -2,8 +2,11 @@
 #require "ZMQ"
 #require "base64"
 #require "yojson"
+#require "str"
 
 #load "errable.cmo"
 #load "message.cmo"
+#load "util.cmo"
 
 open Errable
+open Util
