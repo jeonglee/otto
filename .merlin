@@ -7,3 +7,4 @@ PKG ZMQ
 PKG unix
 PKG threads
 PKG str
+PKG base64
