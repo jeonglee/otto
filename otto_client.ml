@@ -2,7 +2,7 @@ open Client
 
 let base_port = ref (5555)
 
-let remote_ip = ref "localhost"
+let remote_ip = ref "127.0.0.1"
 
 let test_dir = ref "./tests"
 
@@ -21,6 +21,7 @@ let args =
      "The directory containing code to test.");
     ("-remote_ip", Arg.Set_string remote_ip,
      "The IP of the remote command-control server.");
+    ("-debug", Arg.Bool (Util.set_debug), "Controls debug output")
   ]
 
 let usage = "otto_client is the client component of the Otto autograder. Options are:"

@@ -53,6 +53,8 @@ let on_success key =
 let on_failure key =
   print_endline ("Test for " ^ key ^ " timed out.")
 
+let dbg = Util.debug_endline
+
 let () =
   Arg.parse args (fun _ -> raise (Arg.Bad ("Invalid argument"))) usage;
   let bp = !base_port in
@@ -78,11 +80,11 @@ let () =
   in
   let run_success =
     (fun () -> c
-      >>> (CommanderImpl.set_client_connected_callback on_client_connected)
-      >>> (CommanderImpl.set_client_timeout_callback on_client_timeout)
-      >>> (CommanderImpl.set_failure_callback on_failure)
-      >>> (CommanderImpl.set_success_callback on_success)
-      >>= CommanderImpl.main)
+      >>> (dbg "cc"; CommanderImpl.set_client_connected_callback on_client_connected)
+      >>> (dbg "ct"; CommanderImpl.set_client_timeout_callback on_client_timeout)
+      >>> (dbg "of"; CommanderImpl.set_failure_callback on_failure)
+      >>> (dbg "os"; CommanderImpl.set_success_callback on_success)
+      >>= (fun c -> dbg "Starting main"; CommanderImpl.main c))
   in
   Util.try_finally (run_success) (fun () -> c >>> CommanderImpl.close
                                             |> (?!) |> ignore)

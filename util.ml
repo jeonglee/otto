@@ -100,17 +100,22 @@ let read_all_lines filename =
   close_in_noerr c;
   o
 
-let split regex =
-  Str.split (Str.regexp regex)
+module Str = struct
+  let split regex =
+    Str.split (Str.regexp regex)
 
-  let remove_extension fname =
-    let parts = split "\\." fname in
-    match parts with
-    | [] -> ""
-    | h::t -> h
+  let split_whitespace =
+    split "[ \t\r\n]+"
 
-let split_whitespace =
-  split "[ \t\r\n]+"
+  let replace_substr tbr rw s =
+    Str.global_replace (Str.regexp_string tbr) rw s
+end
+
+let remove_extension fname =
+  let parts = Str.split "\\." fname in
+  match parts with
+  | [] -> ""
+  | h::t -> h
 
 let debug = ref false
 
@@ -118,5 +123,5 @@ let set_debug = (:=) debug
 
 let debug_endline s =
   if !debug
-  then print_endline ("DEBUG: " ^ s)
+  then (Printf.printf "DEBUG:%f: %s\n" (Unix.time()) (s); flush stdout)
   else ()

@@ -48,7 +48,7 @@ let rec construct_file_list dir lst h =
               | Some content -> construct_file_list dir ((name,content)::lst) h
 
 let files_from_dir dir =
-  let handle = try Ok (opendir dir) with Unix_error(_,_,_) -> Err Not_found in
+  let handle = try Ok (opendir dir) with e -> Err e in
   handle >>> (construct_file_list dir [])
 
 
