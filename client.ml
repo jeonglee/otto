@@ -161,7 +161,6 @@ module ClientImpl : Client = struct
     in
     exec commands
 
-
   (* Helper to set up and run tests for a given assignment *)
   let run_tests netid timeout files commands =
     let cur = Unix.getcwd () in
