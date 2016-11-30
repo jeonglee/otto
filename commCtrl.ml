@@ -173,7 +173,7 @@ module CommanderImpl : Commander = struct
     Mutex.unlock (c.compl_lock)
 
   let failed_tests t =
-    (StrMap.filter (fun _ a -> a = 3) !(t.attempts))
+    (StrMap.filter (fun _ a -> a >= 3) !(t.attempts))
 
   let fin t =
     let failed = List.length (StrMap.bindings (failed_tests t)) in
