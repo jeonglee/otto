@@ -10,6 +10,8 @@ type config = {
   test_dir : string; (* Directory in which to download files and run tests *)
 }
 
+let dbg = Util.debug_endline
+
 (* Pulls tests from the C&C server, runs them, and responds to the server with
  * a summary of the test results. *)
 module type Client = sig
@@ -28,10 +30,11 @@ module type Client = sig
 
 end
 
-let alarm_handler (delay : float) (pid : int option ref) : unit =
+let alarm_handler (delay : float) (pid : int option ref) () : unit =
   Thread.delay delay;
   match !pid with
-  | Some pid -> Unix.kill pid Sys.sigkill
+  | Some pid -> dbg ("Killing subprocess " ^ (string_of_int pid));
+      Unix.kill pid Sys.sigkill
   | None -> ()
 
 module ClientImpl : Client = struct
@@ -62,22 +65,27 @@ module ClientImpl : Client = struct
   let hb_handler c (u : unit) =
     let open Message in
     let check_if_done m =
-      match m with
-      | Heartbeat(time,d) when (d = true) ->
-          Mutex.lock c.fin_lock;
-          c.finished:=true;
-          Mutex.unlock c.fin_lock;
-      | Heartbeat(time, d) -> ()
-      | _ -> raise Comm.Invalid_ctxt
+      dbg ("Received heartbeat: " ^ Message.marshal m);
+      begin
+        match m with
+        | Heartbeat(time,d) when (d = true) ->
+            dbg "Done! Quitting.";
+            Mutex.lock c.fin_lock;
+            c.finished:=true;
+            Mutex.unlock c.fin_lock;
+            PullCtxt.close c.pull |> ignore;
+        | Heartbeat(time, d) -> dbg "Not done yet.";
+        | _ -> raise Comm.Invalid_ctxt
+      end;
+      let unpack_ip packed = match packed with
+        | Ok ip -> ip
+        | Err e -> raise e in
+      let req = HeartbeatResp (unpack_ip get_ip) in
+      match (ReqCtxt.send req c.hb_resp) with
+        | Ok _ -> ()
+        | Err e -> raise e
     in
-    SubCtxt.connect check_if_done c.sub;
-    let unpack_ip packed = match packed with
-      | Ok ip -> ip
-      | Err e -> "bot is offline" in
-    let req = HeartbeatResp (unpack_ip get_ip) in
-    match (ReqCtxt.send req c.hb_resp) with
-      | Ok _ -> ()
-      | Err e -> raise e
+    SubCtxt.connect check_if_done c.sub
 
   let make conf =
     try
@@ -106,85 +114,112 @@ module ClientImpl : Client = struct
 
   (* Takes in FileCrawler.files and turns them into
    * actual files in the current working directory *)
-  let rec convert_files files =
-    let errables = List.map FileCrawler.write_file files in
+  let rec convert_files netid files =
+    let errables = List.map (FileCrawler.write_file) files in
     List.iter (?!) errables
-
-  (* Helper to make a new directory named netid containing all needed files *)
-  let make_test_dir netid files =
-    let open Unix in
-    mkdir netid 0o770; (* not sure about the permissions *)
-    chdir netid;
-    convert_files files;
-    ()
 
   (* Helper to extract all lines from an open in_channel *)
   let rec get_results channel acc =
     try
-      let new_acc = acc ^ (input_line channel) in
+      let new_acc = acc ^ (input_line channel) ^ "\n" in
       get_results channel new_acc
     with
       | _ -> acc
 
   (* execute pulled commands and returns unit if successful, and raises failure
    * otherwise. A command execution is 'successful' if its exit code is 0 *)
-  let rec execute commands timeout inp outp =
-    | h::t ->
-        let (p, args) = match h with
-        | hd::tl -> (hd, Array.of_list tl)
-        | [] -> ("", [||])
-        in
-        let pid = ref None in
-        alarm_handler timeout pid;
-        pid := Some (Unix.create_process p args inp outp outp);
-        match !pid with
-        | None -> ()
-        | Some x -> begin
-                      match waitpid [] x with
-                      | (_, WEXITED) -> pid := None; ()
-                      | _ -> ()
-    | [] -> ()
+  let execute commands timeout inp outp =
+    let pid_ref = ref None in
+    let _ = (!-> (alarm_handler timeout pid_ref)) in
+    let rec exec = function
+      | [] -> true
+      | h::t ->
+          match Util.Str.split_whitespace h with
+          | [] -> exec t
+          | h::a ->
+              begin
+                let (p,args) = h, (Array.of_list a) in
+                let pid = Unix.create_process p args inp outp outp in
+                pid_ref := Some pid;
+                dbg ("Waiting for " ^ h);
+                let res =
+                  match Unix.waitpid [] pid with
+                  | (_, Unix.WEXITED i) -> dbg ("Exited "^(string_of_int i)); i
+                  | (_, Unix.WSIGNALED i) -> dbg("Signal "^(string_of_int i)); i
+                  | (_, Unix.WSTOPPED i) -> dbg ("Stopped "^(string_of_int i));
+                      i in
+                pid_ref := None;
+                dbg ("Done waiting for " ^ h);
+                Unix.write_substring outp
+                  ("\nEND" ^ h ^ "\n") 0 (String.length h + 5)
+                |> ignore;
+                if res != 0
+                then false
+                else exec t
+              end
+    in
+    exec commands
 
   (* Helper to set up and run tests for a given assignment *)
-  let run_tests netid files commands =
+  let run_tests netid timeout files commands =
     let cur = Unix.getcwd () in
-    make_test_dir netid files;
-    let pipe = Unix.pipe () in
-    execute commands (fst pipe) (snd pipe);
-    Unix.chdir cur;
-    let results_in = Unix.in_channel_of_descr (snd pipe) in
-    let results = get_results results_in "" in
-    close_in results_in;
-    results
+    dbg ("Writing files for " ^ netid);
+    convert_files netid files;
+    dbg ("Done.");
+    let (read,write) = Unix.pipe () in
+    Unix.chdir ("./tests" ^ Filename.dir_sep ^ netid);
+    dbg ("Executing tests for " ^ netid);
+    if execute commands (float_of_int timeout) Unix.stdin write
+    then
+      begin
+        dbg ("Done with test execution for " ^ netid);
+        Unix.chdir cur;
+        Unix.close write;
+        let results_in = Unix.in_channel_of_descr (read) in
+        let results = get_results results_in "" in
+        dbg ("Finished reading results.");
+        close_in results_in;
+        B64.encode results
+      end
+    else
+      (Unix.close write;
+       B64.encode "Failed")
+
 
   let main c =
-    let rec main_loop (c : 'a t) =
-      if !(c.finished) then Ok () else
-      let open Message in
-      let netid = ref "" in
-      let timeout = ref (-1) in
-      let commands = ref [] in
-      let do_on_pull = function
-        | TestSpec(key,t,cmds) -> netid:=key; timeout:=t; commands:=cmds
-        | _ -> raise Comm.Invalid_ctxt
-      in
-      let () = PullCtxt.connect do_on_pull c.pull in
-      let files = ref [] in
-      let req_mes = FileReq (!netid) in
-      match ReqCtxt.send req_mes c.file_req with
-      | Err e ->  Err e
-      | Ok (Files f) -> files := f;
-                        let results = run_tests (!netid) (!files) (!commands) in
-                        let res_mes = TestCompletion (!netid, results) in
-                        let _ = ReqCtxt.send res_mes c.return in
-                        main_loop c
-      | Ok _ -> Err (Failure "unexpected response")
-    in main_loop c
+    dbg "Entered main loop.";
+    if !(c.finished) then Ok () else
+    let open Message in
+    let netid = ref "" in
+    let timeout = ref (-1) in
+    let commands = ref [] in
+    let do_on_pull = function
+      | TestSpec(key,t,cmds) ->
+            netid:=key; timeout:=t; commands:=cmds;
+            dbg ("Received test for key: " ^ key);
+            begin
+              let files = ref [] in
+              let req_mes = FileReq (!netid) in
+              match ReqCtxt.send req_mes c.file_req with
+              | Err e ->  raise e
+              | Ok (Files f) -> files := f;
+                  let results = run_tests (!netid) (!timeout) (!files) (!commands) in
+                  let res_mes = TestCompletion (!netid, results) in
+                  dbg "Sending completed test data...";
+                  ignore (?! (ReqCtxt.send res_mes c.return));
+              | Ok _ -> raise (Failure "unexpected response")
+            end
+      | _ -> raise Comm.Invalid_ctxt
+    in
+    try
+      Ok (PullCtxt.connect do_on_pull c.pull)
+    with
+    | e -> Err e
 
   let close c =
+    dbg "Closing...";
     let s = SubCtxt.close c.sub in
     let h = ReqCtxt.close c.hb_resp in
-    let p = PullCtxt.close c.pull in
     let f = ReqCtxt.close c.file_req in
     let r = ReqCtxt.close c.return in
     let o = {
@@ -193,7 +228,7 @@ module ClientImpl : Client = struct
       remote_ip   = c.remote_ip;
       test_dir    = c.test_dir;
       sub         = s;
-      pull        = p;
+      pull        = c.pull;
       file_req    = f;
       return      = r;
       hb_resp     = h;

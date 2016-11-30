@@ -14,6 +14,8 @@ type config =
     command_file : string; (* a file containing commands for testing. The output of these files becomes result.txt for student test code *)
   }
 
+let dbg = Util.debug_endline
+
 (* Commander handles command and control for a test cluster.
  * It pushes tests contained in a specified test directory to test bots
  * who request files from the command server for testing.
@@ -134,11 +136,13 @@ module CommanderImpl : Commander = struct
     file_thread : Thread.t Once.t;
     res_thread : Thread.t Once.t;
     hbres_thread : Thread.t Once.t;
+    test_push_thread : Thread.t Once.t;
 
     hb_result : unit errable Once.t;
     hbres_result : unit errable Once.t;
     res_result : unit errable Once.t;
     file_result : unit errable Once.t;
+    test_push_result : unit errable Once.t;
 
     total_assignments : int;
 
@@ -152,6 +156,8 @@ module CommanderImpl : Commander = struct
 
     write_lock : Mutex.t;
     commands : command list;
+
+    common_files : FileCrawler.file list;
 
     on_success : test_key -> unit;
     on_failure : test_key -> unit;
@@ -177,8 +183,12 @@ module CommanderImpl : Commander = struct
     Heartbeat (Unix.time (), don)
 
   let close c =
-    let ft = float_of_int c.conf.client_timeout in
-    Thread.delay (ft *. 2.); (* Let the publisher send another heartbeat before dying *)
+    print_endline "Closing.";
+    Util.debug_endline "Freeing resources...";
+    (* let ft = float_of_int c.conf.client_timeout in *)
+    print_endline "Broadcasting end of testing message...";
+    Thread.delay (15.0 +. 1.); (* Let the publisher send another heartbeat before dying *)
+    print_endline "Done.";
     c.die := true;
     let hb_pub = (PubCtxt.close c.hb_pub) in
     let push = (PushCtxt.close c.test_push) in
@@ -211,8 +221,10 @@ module CommanderImpl : Commander = struct
     {t with on_client_connected = c}
 
   let serve_heartbeat c () =
-    while !(c.die) do
-      let timeout = (float_of_int c.conf.client_timeout) in
+    while not !(c.die) do
+      Util.debug_endline "Sending heartbeat";
+      (* let timeout = (float_of_int c.conf.client_timeout) in *)
+      let timeout = 15.0 in
       IPTimeMap.cleanup ~callback:(c.on_client_timeout) timeout (c.live_bots);
       PubCtxt.send (new_heartbeat (fin c)) (c.hb_pub);
       Thread.delay (timeout);
@@ -229,13 +241,13 @@ module CommanderImpl : Commander = struct
     Thread.delay (float_of_int c.conf.client_timeout);
     Mutex.lock c.assignment_lock;
     let f = !(c.finished) in
-    if StrSet.mem assignment f
+    if not (StrSet.mem assignment f)
     then
       begin
         c.not_assigned := StrSet.add assignment (!(c.not_assigned));
         let attempts_made = StrMap.find assignment (!(c.attempts)) in
         c.attempts := StrMap.add assignment (attempts_made+1) (!(c.attempts));
-        c.on_failure assignment
+        c.on_failure (assignment ^ ":" ^ (string_of_int attempts_made))
       end;
     Mutex.unlock c.assignment_lock
 
@@ -244,7 +256,12 @@ module CommanderImpl : Commander = struct
 
   let serve_pusher c () =
     let open Util.Maybe in
-    while !(c.die) do
+    print_endline "Allowing clients to connect...";
+    Thread.delay (3.);
+    print_endline "Starting testing.";
+    while not !(c.die) do
+      Thread.yield ();
+      Util.debug_endline "Pushing tests";
       Mutex.lock c.assignment_lock;
       let a = get_next_assignment c
       >>= (fun a ->
@@ -260,12 +277,15 @@ module CommanderImpl : Commander = struct
       a >>=
       (fun key ->
          PushCtxt.push (make_test_spec key c) c.test_push;
+         print_endline ("Sent test spec for " ^ key);
          return (!-> (alarm_thread c key))
-      ) |> ignore
+      ) |> ignore;
+      (match a with Some _ -> () | _ -> Thread.delay 3.0);
     done
 
   let serve_heartbeat_response c () =
     let respond m rf =
+      Util.debug_endline ("Received heartbeat response: " ^ Message.marshal m);
       let open Util.Maybe in
       (match m with
        | HeartbeatResp ip -> rf (Files []); return ip
@@ -278,19 +298,20 @@ module CommanderImpl : Commander = struct
 
   let serve_results c () =
     let respond m rf =
+      Util.debug_endline ("Received results response: " ^ Message.marshal m);
       Mutex.lock c.assignment_lock;
       let open Util.Maybe in
       (match m with
-       | Files (res_dat::[]) -> rf (Files []); return res_dat
+       | TestCompletion (key, res) -> rf (Files []); return (key,res)
        | _ -> None)
       >>> (fun result_data ->
           (* TODO: Ensure the client is calling the result file something
              appropriate *)
           ignore (FileCrawler.write_file ~dir:("./results") result_data);
-          let key = Filename.basename (fst result_data)
-                    |> Util.remove_extension in
+          let key = (fst result_data) in
           c.not_assigned := StrSet.remove key (!(c.not_assigned));
           c.finished := StrSet.add key (!(c.finished));
+          c.on_success key;
           Mutex.lock c.compl_lock;
           if fin c
           then (c.completed := true; Condition.broadcast c.completed_cond);
@@ -301,43 +322,61 @@ module CommanderImpl : Commander = struct
     in
     RespCtxt.serve respond c.result_serv
 
+  let get_common_files c =
+    let open Errable.M in
+    ?! (FileCrawler.files_from_dir c.common_dir)
+
+  let prep_files key c =
+    let open Errable.M in
+    let key_dir = c.conf.test_dir ^ Filename.dir_sep ^ key in
+    let fs = ?! (FileCrawler.files_from_dir key_dir) in
+    let com = c.common_files in
+    List.map (fun (n,con) ->
+        (Util.Str.replace_substr c.conf.common_dir key_dir n,con)) com
+    |> List.rev_append fs
+
   let serve_files c () =
     let respond m rf =
+      Util.debug_endline ("Received file request: " ^ Message.marshal m);
       let files =
         try
           (let open Util.Maybe in
           (match m with
-           | FileReq (key) -> rf (Files []); return key
+           | FileReq (key) -> return key
            | _ -> None)
           >>> (fun key ->
-              if key <> "common"
-              then FileCrawler.files_from_dir (c.conf.test_dir ^ key)
-              else FileCrawler.files_from_dir (c.conf.common_dir))
+              Ok (prep_files key c))
           |> coerce)
         with
         | e -> Err e
       in
-      let open Errable.M in
-      files
-      >>> (fun f -> Files (f))
-      >>> rf
-      |> ignore
+      match files with
+      | Ok f -> dbg ("Sending files: " ^ (Message.marshal (Files f)));
+          rf (Files f); dbg "Sent."
+      | Err e -> dbg "Failed to send files"; rf (Files []); raise e
     in
     RespCtxt.serve respond c.file_serv
 
   let main c =
     try
+      Util.debug_endline "Entering main";
       let open Errable.M in
+      Util.debug_endline ("Starting file server.");
       Once.set (!-> (serve_files c)) c.file_thread;
+      Util.debug_endline ("Starting results server.");
       Once.set (!-> (serve_results c)) c.res_thread;
-      Once.set (!-> (serve_heartbeat_response c)) c.res_thread;
-      Once.set (!-> (serve_heartbeat c)) c.res_thread;
-      Once.set (!-> (serve_pusher c)) c.res_thread;
+      Util.debug_endline ("Starting heartbeat response server.");
+      Once.set (!-> (serve_heartbeat_response c)) c.hbres_thread;
+      Util.debug_endline ("Starting heartbeat.");
+      Once.set (!-> (serve_heartbeat c)) c.hb_thread;
+      Util.debug_endline ("Starting test pusher.");
+      Once.set (!-> (serve_pusher c)) c.test_push_thread;
+      Util.debug_endline ("Ready to start serving.");
       wait_for_completion c;
-      ?! (Once.coerce c.hbres_result);
+      (* ?! (Once.coerce c.hbres_result);
       ?! (Once.coerce c.hb_result);
       ?! (Once.coerce c.file_result);
-      ?! (Once.coerce c.res_result);
+      ?! (Once.coerce c.res_result); *)
       Ok ()
     with
     | e -> Err e
@@ -376,11 +415,13 @@ module CommanderImpl : Commander = struct
     hbres_thread = Once.make ();
     res_thread = Once.make ();
     file_thread = Once.make ();
+    test_push_thread = Once.make ();
 
     hb_result = Once.make ();
     hbres_result = Once.make ();
     res_result = Once.make ();
     file_result = Once.make ();
+    test_push_result = Once.make ();
 
     total_assignments = -1;
     live_bots = IPTimeMap.empty ();
@@ -398,6 +439,7 @@ module CommanderImpl : Commander = struct
     on_client_timeout = default_callback;
     on_client_connected = default_callback;
     commands = load_commands (conf.command_file);
+    common_files = get_common_files conf;
     } in
     initial_tests (conf.test_dir)
     >>= (fun (a,n) ->

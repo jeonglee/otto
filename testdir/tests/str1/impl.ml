@@ -1,0 +1,1 @@
+let add_two x = x ^ "2"
