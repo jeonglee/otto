@@ -87,7 +87,6 @@ module ClientImpl : Client = struct
     in
     SubCtxt.connect check_if_done c.sub
 
-
   let make conf =
     try
       let o = {
