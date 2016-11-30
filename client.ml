@@ -131,11 +131,12 @@ module ClientImpl : Client = struct
   let execute commands timeout inp outp =
     let pid_ref = ref None in
     let _ = (!-> (alarm_handler timeout pid_ref)) in
-    let rec exec = function
+    (*let rec exec = function*)
+    match commands with
       | [] -> true
       | h::t ->
           match Util.Str.split_whitespace h with
-          | [] -> exec t
+          | [] -> (*exec t*) true
           | h::a ->
               begin
                 let (p,args) = h, (Array.of_list a) in
@@ -155,10 +156,10 @@ module ClientImpl : Client = struct
                 |> ignore;
                 if res <> 0
                 then false
-                else exec t
+                else (*exec t*) true
               end
-    in
-    exec commands
+    (*in
+    exec commands*)
 
   (* Helper to set up and run tests for a given assignment *)
   let run_tests netid timeout files commands =
