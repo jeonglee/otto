@@ -154,7 +154,7 @@ module ClientImpl : Client = struct
                 Unix.write_substring outp
                   ("\nEND" ^ h ^ "\n") 0 (String.length h + 5)
                 |> ignore;
-                if res != 0
+                if res <> 0
                 then false
                 else exec t
               end
