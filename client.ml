@@ -73,7 +73,7 @@ module ClientImpl : Client = struct
     SubCtxt.connect check_if_done c.sub;
     let unpack_ip packed = match packed with
       | Ok ip -> ip
-      | Err e -> raise e in
+      | Err e -> "bot is offline" in
     let req = HeartbeatResp (unpack_ip get_ip) in
     match (ReqCtxt.send req c.hb_resp) with
       | Ok _ -> ()
