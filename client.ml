@@ -33,8 +33,9 @@ end
 let alarm_handler (delay : float) (pid : int option ref) () : unit =
   Thread.delay delay;
   match !pid with
-  | Some pid -> dbg ("Killing subprocess " ^ (string_of_int pid));
-      Unix.kill pid Sys.sigterm
+  | Some pid -> dbg ("Killing subprocesses");
+      Util.Proc.kill_desc_proc pid;
+      Util.Proc.wait_on_all_proc () (* Clean up zombies *)
   | None -> ()
 
 module ClientImpl : Client = struct
@@ -144,11 +145,15 @@ module ClientImpl : Client = struct
                 pid_ref := Some pid;
                 dbg ("Waiting for " ^ h);
                 let res =
-                  match Unix.waitpid [] pid with
-                  | (_, Unix.WEXITED i) -> dbg ("Exited "^(string_of_int i)); i
-                  | (_, Unix.WSIGNALED i) -> dbg("Signal "^(string_of_int i)); i
-                  | (_, Unix.WSTOPPED i) -> dbg ("Stopped "^(string_of_int i));
-                      i in
+                  try
+                    match Unix.waitpid [] pid with
+                    | (_, Unix.WEXITED i) -> dbg ("Exited "^(string_of_int i)); i
+                    | (_, Unix.WSIGNALED i) -> dbg("Signal "^(string_of_int i)); i
+                    | (_, Unix.WSTOPPED i) -> dbg ("Stopped "^(string_of_int i));
+                        i
+                  with
+                  | Unix.Unix_error (Unix.ECHILD,_,_) -> -1 (* Child process was killed *)
+                in
                 pid_ref := None;
                 dbg ("Done waiting for " ^ h);
                 Unix.write_substring outp

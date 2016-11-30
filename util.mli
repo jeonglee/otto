@@ -38,3 +38,9 @@ module Str : sig
   val split_whitespace : string -> string list
   val replace_substr : string -> string -> string -> string
 end
+
+module Proc : sig
+  val desc_proc_ids : int -> int list
+  val kill_desc_proc : int -> unit
+  val wait_on_all_proc : unit -> unit
+end
