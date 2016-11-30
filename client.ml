@@ -34,7 +34,7 @@ let alarm_handler (delay : float) (pid : int option ref) () : unit =
   Thread.delay delay;
   match !pid with
   | Some pid -> dbg ("Killing subprocess " ^ (string_of_int pid));
-      Unix.kill pid Sys.sigkill
+      Unix.kill pid Sys.sigterm
   | None -> ()
 
 module ClientImpl : Client = struct
@@ -152,7 +152,7 @@ module ClientImpl : Client = struct
                 pid_ref := None;
                 dbg ("Done waiting for " ^ h);
                 Unix.write_substring outp
-                  ("\nEND" ^ h ^ "\n") 0 (String.length h + 5)
+                  ("\nEND " ^ h ^ "\n") 0 (String.length h + 6)
                 |> ignore;
                 if res != 0
                 then false
