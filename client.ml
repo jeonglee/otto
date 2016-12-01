@@ -136,7 +136,7 @@ module ClientImpl : Client = struct
     match commands with
       | [] -> true
       | h::t ->
-          match Util.Str.split_whitespace h with
+          match Util.Strs.split_whitespace h with
           | [] -> (*exec t*) true
           | h::a ->
               begin
@@ -167,7 +167,7 @@ module ClientImpl : Client = struct
     exec commands*)
 
   (* Helper to set up and run tests for a given assignment *)
-  let run_tests netid timeout files commands =
+  let run_tests c netid timeout files commands =
     let cur = Unix.getcwd () in
     dbg ("Writing files for " ^ netid);
     convert_files netid files;
@@ -175,21 +175,25 @@ module ClientImpl : Client = struct
     let (read,write) = Unix.pipe () in
     Unix.chdir ("./tests" ^ Filename.dir_sep ^ netid);
     dbg ("Executing tests for " ^ netid);
-    if execute commands (float_of_int timeout) Unix.stdin write
-    then
+    let res =
       begin
-        dbg ("Done with test execution for " ^ netid);
-        Unix.chdir cur;
-        Unix.close write;
-        let results_in = Unix.in_channel_of_descr (read) in
-        let results = get_results results_in "" in
-        dbg ("Finished reading results.");
-        close_in results_in;
-        B64.encode results
+        if execute commands (float_of_int timeout) Unix.stdin write
+        then
+          begin
+            dbg ("Done with test execution for " ^ netid);
+            Unix.close write;
+            let results_in = Unix.in_channel_of_descr (read) in
+            let results = get_results results_in "" in
+            dbg ("Finished reading results.");
+            close_in results_in;
+            B64.encode results
+          end
+        else
+          (Unix.close write;
+           B64.encode "Failed")
       end
-    else
-      (Unix.close write;
-       B64.encode "Failed")
+    in 
+    Unix.chdir cur; res
 
 
   let main c =
@@ -209,7 +213,7 @@ module ClientImpl : Client = struct
               match ReqCtxt.send req_mes c.file_req with
               | Err e ->  raise e
               | Ok (Files f) -> files := f;
-                  let results = run_tests (!netid) (!timeout) (!files) (!commands) in
+                  let results = run_tests c (!netid) (!timeout) (!files) (!commands) in
                   let res_mes = TestCompletion (!netid, results) in
                   dbg "Sending completed test data...";
                   ignore (?! (ReqCtxt.send res_mes c.return));

@@ -53,6 +53,7 @@ let rec construct_file_list dir lst h =
 (* [files_from_dir dir] attempts to open a handle on the directory [dir] and
  * uses it to construct a file list using construct_file_list *)
 let files_from_dir dir =
+  Util.debug_endline ("Opening directory " ^ dir);
   let handle = try Ok (opendir dir) with e -> Err e in
   handle >>> (construct_file_list dir [])
 
@@ -78,3 +79,19 @@ let subdirectories path =
     |> return
   with
   | e -> Err e
+
+module Grading = struct
+
+  let ran_rex = Str.regexp "^Ran: ([0-9]+) tests.+"
+  let score_board = "FAILED: Cases: +([0-9]+) +Tried: +([0-9]+)+ +Errors: "
+                    ^ "+([0-9]+) +Failures: +([0-9]+) +Skip: +([0-9]+) +Todo:"
+                    ^ " +([0-9]+) +Timeouts: +([0-9]+)\\."
+
+  let grade_from_string fc =
+    failwith ""
+
+  let grade_results dir =
+    let _ = files_from_dir dir in
+    failwith ""
+
+end

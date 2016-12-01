@@ -328,12 +328,17 @@ module CommanderImpl : Commander = struct
 
   let prep_files key c =
     let open Errable.M in
-    let key_dir = c.conf.test_dir ^ Filename.dir_sep ^ key in
-    let fs = ?! (FileCrawler.files_from_dir key_dir) in
-    let com = c.common_files in
-    List.map (fun (n,con) ->
-        (Util.Str.replace_substr c.conf.common_dir key_dir n,con)) com
-    |> List.rev_append fs
+    let o_dir = c.conf.test_dir ^ Filename.dir_sep ^ key ^ Filename.dir_sep in
+    let fs = ?! (FileCrawler.files_from_dir o_dir) in
+    let key_dir = "./tests" ^ Filename.dir_sep ^ key ^ Filename.dir_sep in
+    let com = c.common_files
+    |> List.map (fun (n,con) ->
+                  (Util.Strs.replace_substr c.conf.common_dir key_dir n,con))
+    in
+    fs
+    |> List.map (fun (n,con) ->
+        (Util.Strs.replace_substr c.conf.test_dir "./tests/" n,con))
+    |> List.rev_append com
 
   let serve_files c () =
     let respond m rf =

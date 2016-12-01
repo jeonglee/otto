@@ -12,3 +12,8 @@ val files_from_dir : string -> file list errable
 val write_file : ?dir:string -> file -> unit errable
 
 val subdirectories : string -> string list errable
+
+module Grading : sig
+  val grade_results : string -> unit
+  val grade_from_string : string -> int
+end

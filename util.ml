@@ -100,7 +100,7 @@ let read_all_lines filename =
   close_in_noerr c;
   o
 
-module Str = struct
+module Strs = struct
   let split regex =
     Str.split (Str.regexp regex)
 
@@ -112,7 +112,7 @@ module Str = struct
 end
 
 let remove_extension fname =
-  let parts = Str.split "\\." fname in
+  let parts = Strs.split "\\." fname in
   match parts with
   | [] -> ""
   | h::t -> h

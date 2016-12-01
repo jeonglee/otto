@@ -17,8 +17,6 @@ let args =
   [
     ("-port", Arg.Set_int base_port,
      "The lowest port the server should use. Default 5555");
-    ("-tests", Arg.Set_string test_dir,
-     "The directory containing code to test.");
     ("-remote_ip", Arg.Set_string remote_ip,
      "The IP of the remote command-control server.");
     ("-debug", Arg.Bool (Util.set_debug), "Controls debug output")

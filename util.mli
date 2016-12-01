@@ -33,7 +33,7 @@ module Maybe : Monad with type 'a t = 'a option
 val set_debug : bool -> unit
 val debug_endline : string -> unit
 
-module Str : sig
+module Strs : sig
   val split : string -> string -> string list
   val split_whitespace : string -> string list
   val replace_substr : string -> string -> string -> string

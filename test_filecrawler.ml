@@ -15,9 +15,11 @@ let print_l l =
 let files_from_dir_tests =
    "files_from_dir tests" >::: [
       "non-existent directory" >:: (fun _ ->
-          assert_raises Not_found (fun _ -> (files_from_dir "abc") |> (?!)));
+         assert_raises (Unix.Unix_error(Unix.ENOENT,"opendir", "abc"))
+           (fun _ -> (files_from_dir "abc") |> (?!)));
       "non-existent directory" >:: (fun _ ->
-          assert_equal (Err Not_found) (files_from_dir "abc"));
+          assert_equal (Err (Unix.Unix_error(Unix.ENOENT,"opendir", "abc")))
+            (files_from_dir "abc"));
       "testFileCrawler" >:: (fun _ ->
           assert_equal ~printer:print_l
             (List.sort compare [("testFileCrawler/test.txt", "aGVsbG8gd29ybGQhCg==");

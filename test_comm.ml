@@ -51,6 +51,12 @@ let test_pub_sub () =
   ??? sub2t;
   update_counter ()
 
+let test_normal = "Normal" >:: (fun ctxt -> ())
+let test_assert = "Assert" >:: (fun ctxt -> assert_equal 1 1)
+let test_todo = "Todo" >:: (fun ctxt -> todo "test")
+let test_skip = "Skip" >:: (fun ctxt -> skip_if true "to be skipped")
+let test_fail = "Fail" >:: (fun ctxt -> assert_equal 1 2)
+let test_error = "Error" >:: (fun ctxt -> failwith "Not expected")
 
 let test = "Comm Tests" >::: [
 
@@ -59,7 +65,16 @@ let test = "Comm Tests" >::: [
         assert_equal ~printer:string_of_int 3 (test_pub_sub ()));
 
         "Echo test" >:: (fun _ ->
-            assert_equal (FileReq "Hey", FileReq "Hey") (test_echo (FileReq "Hey")));
+        assert_equal (FileReq "Hey", FileReq "Hey") (test_echo (FileReq "Hey")));
+
+    "Err" >:: (fun _ -> assert_equal 1 (failwith "Butt"));
+
+    test_error;
+    test_todo;
+    test_skip;
+    test_fail;
+    test_error
+
   ]
 
 let () = Test.add_test test
