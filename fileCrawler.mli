@@ -14,6 +14,17 @@ val write_file : ?dir:string -> file -> unit errable
 val subdirectories : string -> string list errable
 
 module Grading : sig
-  val grade_results : string -> unit
-  val grade_from_string : string -> int
+  type res = {
+    passed : int;
+    failed : int;
+    errored : int;
+    other : int;
+  }
+
+  val ran_rex : Str.regexp
+  val score_board : Str.regexp
+  val success : Str.regexp
+
+  val grade_results : string -> unit errable
+  val grade_from_string : string -> res
 end

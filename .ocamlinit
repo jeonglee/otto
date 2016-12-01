@@ -7,6 +7,7 @@
 #load "errable.cmo"
 #load "message.cmo"
 #load "util.cmo"
+#load "fileCrawler.cmo"
 
 open Errable
 open Util

@@ -88,6 +88,7 @@ let () =
   in
   Util.try_finally (run_success) (fun () -> c >>> CommanderImpl.close
                                             |> (?!) |> ignore)
-  |> (?!)
-  |> ignore;
+  >>= (fun _ -> FileCrawler.Grading.grade_results "./results")
+  >>> (fun () -> print_endline "Successfully graded results.")
+  |> (?!);
   print_endline "Success!"

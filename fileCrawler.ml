@@ -68,6 +68,7 @@ let write_file ?dir:(d=".") (name,contents) =
   let _ = Sys.command ("mkdir -p " ^ dirname) in
   let out_channel = open_out path in
   output_string out_channel (B64.decode contents);
+  Util.debug_endline ("Tried to write " ^ name);
   try (Ok (close_out out_channel)) with (Sys_error err) -> Err (Sys_error err)
 
 let subdirectories path =
@@ -82,16 +83,69 @@ let subdirectories path =
 
 module Grading = struct
 
-  let ran_rex = Str.regexp "^Ran: ([0-9]+) tests.+"
-  let score_board = "FAILED: Cases: +([0-9]+) +Tried: +([0-9]+)+ +Errors: "
-                    ^ "+([0-9]+) +Failures: +([0-9]+) +Skip: +([0-9]+) +Todo:"
-                    ^ " +([0-9]+) +Timeouts: +([0-9]+)\\."
+  type res = {
+    passed : int;
+    failed : int;
+    errored : int;
+    other : int;
+  }
+
+  let string_of_res r =
+    let soi = string_of_int in
+    (soi r.passed) ^ "," ^ (soi r.failed)
+    ^ "," ^ (soi r.errored) ^ "," ^ (soi r.other)
+
+  let ran_rex = Str.regexp "Ran: +\\([0-9]+\\) +tests.+"
+  let score_board = "FAILED: Cases: +\\([0-9]+\\) +Tried: +\\([0-9]+\\)+ +Errors: "
+                    ^ "+\\([0-9]+\\) +Failures: +\\([0-9]+\\) "
+                    ^ "+Skip: +\\([0-9]+\\) +Todo:"
+                    ^ " +\\([0-9]+\\) +Timeouts: +\\([0-9]+\\).*" |> Str.regexp
+  let success = Str.regexp "OK"
 
   let grade_from_string fc =
-    failwith ""
+    let start = ((String.length fc)-1) in
+    try
+      Str.search_backward ran_rex fc start |> ignore;
+      let tests_run = Str.matched_group 1 fc |> int_of_string in
+      let all_passed =
+        try
+          Str.search_backward success fc start |> ignore;
+          true
+        with
+        | Not_found -> false
+      in
+      if all_passed
+      then {passed=tests_run;failed=0;errored=0;other=0}
+      else
+        begin
+          Str.search_backward score_board fc start |> ignore;
+          let errored = Str.matched_group 3 fc |> int_of_string in
+          let failed = Str.matched_group 4 fc |> int_of_string in
+          let skipped = Str.matched_group 5 fc |> int_of_string in
+          let todo = Str.matched_group 6 fc |> int_of_string in
+          let timeouts = Str.matched_group 7 fc |> int_of_string in
+          let passed = tests_run -
+                       (errored + failed + skipped + todo + timeouts) in
+          {passed;failed;errored;other=(skipped+todo+timeouts)}
+        end
+    with
+    | Not_found -> {passed=0;failed=0;errored=0;other=0}
 
   let grade_results dir =
-    let _ = files_from_dir dir in
-    failwith ""
+    let files = files_from_dir dir in
+    let open Errable.M in
+    files
+    >>> (fun f ->
+        (* Compared to Sys.remove, this fails silently. *)
+        Sys.command "rm aggregate.csv > /dev/null" |> ignore;
+        f)
+    >>> (List.filter (fun (f,c) -> f <> "aggregate.csv"))
+    >>> (List.map (fun (f,c) -> Filename.basename f, B64.decode c))
+    >>> (List.map (fun (f,c) -> f, grade_from_string c))
+    >>> (List.map (fun (f,r) -> f ^ "," ^ (string_of_res r)))
+    >>> (String.concat "\n")
+    >>> (fun rs -> "key,passed,failed,errored,other\n" ^ rs)
+    >>> (fun rs -> ("aggregate.csv",B64.encode rs))
+    >>= (write_file)
 
 end
