@@ -53,7 +53,7 @@ let rec construct_file_list dir lst h =
 (* [files_from_dir dir] attempts to open a handle on the directory [dir] and
  * uses it to construct a file list using construct_file_list *)
 let files_from_dir dir =
-  let handle = try Ok (opendir dir) with Unix_error(_,_,_) -> Err Not_found in
+  let handle = try Ok (opendir dir) with e -> Err e in
   handle >>> (construct_file_list dir [])
 
 (* [write_file ?dir (name,contents)] writes to the specified file in the given

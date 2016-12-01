@@ -100,8 +100,19 @@ let read_all_lines filename =
   close_in_noerr c;
   o
 
+module Str = struct
+  let split regex =
+    Str.split (Str.regexp regex)
+
+  let split_whitespace =
+    split "[ \t\r\n]+"
+
+  let replace_substr tbr rw s =
+    Str.global_replace (Str.regexp_string tbr) rw s
+end
+
 let remove_extension fname =
-  let parts = Str.split (Str.regexp ".") fname in
+  let parts = Str.split "\\." fname in
   match parts with
   | [] -> ""
   | h::t -> h
@@ -112,5 +123,38 @@ let set_debug = (:=) debug
 
 let debug_endline s =
   if !debug
-  then print_endline ("DEBUG: " ^ s)
+  then (Printf.printf "DEBUG:%f: %s\n" (Unix.time()) (s); flush stdout)
   else ()
+
+module Proc = struct
+  let desc_proc_ids pid =
+    let op = Unix.open_process_in
+        ("pstree -p " ^ (string_of_int pid)
+         ^ " | sed 's/(/\\n(/g' | grep '(' | sed 's/(\\(.*\\)).*/\\1/'") in
+    let rec exl l c =
+      try
+        let line = input_line c in
+        exl (line::l) c
+      with
+      | End_of_file -> l
+    in
+    let sl = exl [] op |> List.rev in
+    close_in_noerr op;
+    List.map int_of_string sl
+    |> List.filter ((<>) pid)
+
+  let kill_desc_proc pid =
+    let desc = desc_proc_ids pid in
+    List.iter (fun p ->
+        try
+          Unix.kill p Sys.sigterm
+        with
+        | Unix.Unix_error (Unix.ESRCH,_,_) -> ()) desc
+
+  let rec wait_on_all_proc () =
+    try
+      Unix.wait () |> ignore; wait_on_all_proc ()
+    with
+    | Unix.Unix_error (Unix.ECHILD,_,_) -> ()
+
+end

@@ -3,6 +3,8 @@ exception Timeout
 
 open Errable
 
+let dbg = Util.debug_endline
+
 type server_config =
   {
     port : int
@@ -161,7 +163,6 @@ module ReqCtxt : RequesterContext = struct
     Util.debug_endline "Creating req ctxt";
     Sock.connect o.conn.sock (make_conn_str o.hostname o.port);
     Sock.set_send_timeout o.conn.sock five_seconds;
-    Sock.set_receive_timeout o.conn.sock five_seconds;
     Util.debug_endline "Created req context";
     o
 
@@ -170,8 +171,11 @@ module ReqCtxt : RequesterContext = struct
 
   let send m (c : [>`Req] t) =
     try
+      dbg "Sending request";
       Sock.send c.conn.sock (Message.marshal m);
+      dbg "Waiting for response";
       let resp = Sock.recv c.conn.sock in
+      dbg "Received.";
       Message.unmarshal resp
     with
     | e -> Err e
@@ -211,9 +215,10 @@ module RespCtxt : ResponderContext = struct
     let rec loop () : unit =
       begin
         try
+          dbg "Waiting for request";
           let req = Sock.recv c.conn.sock in
           (match (unmarshal req) with
-          | Ok m -> f m cbf
+          | Ok m -> dbg "Received request"; f m cbf
           | _ -> ());
         with
         | Unix_error (EAGAIN, "zmq_msg_recv", "") -> ()
@@ -251,7 +256,9 @@ module PubCtxt : PublisherContext = struct
   let send m t =
     let messtr = (marshal m) in
     try
-      Sock.send t.conn.sock messtr
+      dbg "Publishing...";
+      Sock.send t.conn.sock messtr;
+      dbg "Published";
     with
     | Unix_error (EAGAIN, _,_) -> raise Timeout
 
@@ -295,7 +302,9 @@ module SubCtxt : SubscriberContext = struct
     let rec loop () : unit =
       begin
         try
+          dbg "Waiting for publication...";
           let req = Sock.recv c.conn.sock in
+          dbg "Received publication";
           (match (unmarshal req) with
            | Ok m -> (f m)
            | _ -> ());
@@ -327,13 +336,13 @@ module PushCtxt : PusherContext = struct
     } in
     Util.debug_endline "Creating push ctxt";
     Sock.bind o.conn.sock (make_bind_str o.port);
-    Sock.set_send_timeout o.conn.sock five_seconds;
     Util.debug_endline "Created push context";
     o
 
   let push (m : Message.mes) (t: 'a t) =
-    Util.debug_endline "Sent";
-    Sock.send t.conn.sock (Message.marshal m)
+    Util.debug_endline "Sending push";
+    Sock.send t.conn.sock (Message.marshal m);
+    dbg "Sent push"
 
   let close t =
     clean_conn t.conn; t
@@ -378,9 +387,10 @@ module PullCtxt : PullerContext = struct
     let rec loop () : unit =
       begin
         try
+          dbg "Pulling...";
           let pull = Sock.recv t.conn.sock in
           (match (Message.unmarshal pull) with
-          | Ok m -> f m
+          | Ok m -> dbg "Pulled."; f m
           | _ -> ());
         with
         | Unix_error (EAGAIN, "zmq_msg_recv", "") -> ()

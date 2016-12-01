@@ -9,17 +9,18 @@ type config = {
 (* Pulls tests from the C&C server, runs them, and responds to the server with
  * a summary of the test results. *)
 module type Client = sig
-  type t
+  type 'a t
+    constraint 'a = [> `Sub | `Pull |`Req ]
 
   (* make initializes a new client *)
-  val make : config -> t errable
+  val make : config -> 'a t errable
 
   (* main runs the client until the testing server goes down or
    * broadcasts the fact that there are no more tests to run. *)
-  val main : t -> unit errable
+  val main : 'a t -> unit errable
 
   (* Frees any resources held by a client. *)
-  val close : t -> t
+  val close : 'a t -> 'a t
 
 end
 

@@ -32,3 +32,15 @@ module Maybe : Monad with type 'a t = 'a option
 
 val set_debug : bool -> unit
 val debug_endline : string -> unit
+
+module Str : sig
+  val split : string -> string -> string list
+  val split_whitespace : string -> string list
+  val replace_substr : string -> string -> string -> string
+end
+
+module Proc : sig
+  val desc_proc_ids : int -> int list
+  val kill_desc_proc : int -> unit
+  val wait_on_all_proc : unit -> unit
+end
