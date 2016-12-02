@@ -159,9 +159,7 @@ module ClientImpl : Client = struct
                 Unix.write_substring outp
                   ("\nEND " ^ h ^ "\n") 0 (String.length h + 6)
                 |> ignore;
-                if res <> 0
-                then false
-                else (*exec t*) true
+                not (res <> 0)
               end
     (*in
     exec commands*)
@@ -192,7 +190,7 @@ module ClientImpl : Client = struct
           (Unix.close write;
            B64.encode "Failed")
       end
-    in 
+    in
     Unix.chdir cur; res
 
 

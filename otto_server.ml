@@ -1,3 +1,4 @@
+(* This is the main file for the server. *)
 open CommCtrl
 
 let base_port = ref (5555)

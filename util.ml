@@ -129,6 +129,7 @@ let debug_endline s =
 module Proc = struct
   let desc_proc_ids pid =
     let op = Unix.open_process_in
+        (* Taken from http://stackoverflow.com/a/8544913 *)
         ("pstree -p " ^ (string_of_int pid)
          ^ " | sed 's/(/\\n(/g' | grep '(' | sed 's/(\\(.*\\)).*/\\1/'") in
     let rec exl l c =
