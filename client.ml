@@ -54,6 +54,8 @@ module ClientImpl : Client = struct
     hb_thread   : Thread.t Once.t;
   } constraint 'a = [> `Req | `Sub | `Pull ]
 
+  (* Returns an errable of the external ip address as a string. If there is
+   * no connection, returns an End_of_file exception wrapped in an errable *)
   let get_ip =
     try (Ok (Unix.open_process_in "curl -s \"https://api.ipify.org\" 2>/dev/null"
       |> input_line))
@@ -192,7 +194,7 @@ module ClientImpl : Client = struct
           (Unix.close write;
            B64.encode "Failed")
       end
-    in 
+    in
     Unix.chdir cur; res
 
 
