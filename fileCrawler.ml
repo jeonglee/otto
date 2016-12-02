@@ -18,28 +18,6 @@ let file_to_string f =
 (* see Filename.dir_sep *)
 let slash = Filename.dir_sep
 
-(* let rec construct_file_list handle file dir =
-  let name      = dir ^ slash ^ file in
-  let content   = file_to_string file in
-  let next_file = try Some (readdir handle) with End_of_file -> None in
-  (name,content)::match next_file with
-                  | Some f -> construct_file_list handle f dir
-                  | None   -> closedir handle; [] *)
-
-(* let files_from_dir dir =
-  let handle = try Ok (opendir dir) with Unix_error(_,_,_) -> Err Not_found in
-               match handle with
-               | Err e -> Err e
-               | Ok h ->
-                   let file1  = try Ok (readdir h) with End_of_file -> Err Not_found in
-               match file1 with
-               | Err e -> closedir h; Err e
-               | Ok f ->
-                   Ok (construct_file_list (?!handle) (?!file1) dir) *)
-
-(* [construct_file_list dir lst h] constructs a list of files in [dir], ignoring
- * anything within the directory that raises a Sys_error when we try to
- * Pervasives.open_in it (ex. a sub-directory like "." or "..") *)
 let rec construct_file_list dir lst h =
   let file = try Some (readdir h) with End_of_file -> closedir h; None in
   match file with
@@ -137,7 +115,7 @@ module Grading = struct
     files
     >>> (fun f ->
         (* Compared to Sys.remove, this fails silently. *)
-        Sys.command "rm aggregate.csv > /dev/null" |> ignore;
+        Sys.command "rm aggregate.csv 2>/dev/null" |> ignore;
         f)
     >>> (List.filter (fun (f,c) -> f <> "aggregate.csv"))
     >>> (List.map (fun (f,c) -> Filename.basename f, B64.decode c))
