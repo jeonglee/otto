@@ -30,6 +30,7 @@ module type Client = sig
 
 end
 
+(* Handler to implement testing timeout. *)
 let alarm_handler (delay : float) (pid : int option ref) () : unit =
   Thread.delay delay;
   match !pid with
@@ -49,10 +50,12 @@ module ClientImpl : Client = struct
     pull        : 'a PullCtxt.t;   (* For pulling tests *)
     file_req    : 'a ReqCtxt.t;    (* For getting files to grade *)
     return      : 'a ReqCtxt.t;    (* For returning graded results *)
-    finished    : bool ref;
-    fin_lock    : Mutex.t;
-    hb_thread   : Thread.t Once.t;
+    finished    : bool ref;        (* For keeping track of status of grading *)
+    fin_lock    : Mutex.t;         (* For maintaining thread-safety when
+                                      updating the finished field *)
+    hb_thread   : Thread.t Once.t; (* For running the heartbeat handler thread *)
   } constraint 'a = [> `Req | `Sub | `Pull ]
+
 
   (* Returns an errable of the external ip address as a string. If there is
    * no connection, returns an End_of_file exception wrapped in an errable *)
@@ -64,7 +67,7 @@ module ClientImpl : Client = struct
 
   (* Helper function for receiving and responding to heartbeats *)
   (* This will also be responsible for checking when grading is done *)
-  (* When it is, it should set the value at [finished] to true *)
+  (* When it is, it should set the value at [c.finished] to true *)
   let hb_handler c (u : unit) =
     let open Message in
     let check_if_done m =
@@ -90,6 +93,7 @@ module ClientImpl : Client = struct
     in
     SubCtxt.connect check_if_done c.sub
 
+  (* make initializes a new client *)
   let make conf =
     try
       let o = {
@@ -115,8 +119,7 @@ module ClientImpl : Client = struct
       Ok o
     with e -> Err e
 
-  (* Takes in FileCrawler.files and turns them into
-   * actual files in the current working directory *)
+  (* Takes in FileCrawler.files and turns them into actual files *)
   let rec convert_files netid files =
     let errables = List.map (FileCrawler.write_file) files in
     List.iter (?!) errables
@@ -129,17 +132,20 @@ module ClientImpl : Client = struct
     with
       | _ -> acc
 
-  (* execute pulled commands and returns unit if successful, and raises failure
-   * otherwise. A command execution is 'successful' if its exit code is 0 *)
+  (* execute pulled commands and returns true if successful, and false
+   * otherwise. A command execution is 'successful' if its exit code is 0.
+   * It creates a new process to run the given command in, and pipes
+   * the stdout and stderr of that process to the given output channel.
+   * This new process is killed either by the timeout or at the end of
+   * its execution if it is able to run to completion. *)
   let execute commands timeout inp outp =
     let pid_ref = ref None in
     let _ = (!-> (alarm_handler timeout pid_ref)) in
-    (*let rec exec = function*)
     match commands with
       | [] -> true
       | h::t ->
           match Util.Strs.split_whitespace h with
-          | [] -> (*exec t*) true
+          | [] -> true
           | h::a ->
               begin
                 let (p,args) = h, (Array.of_list a) in
@@ -163,12 +169,14 @@ module ClientImpl : Client = struct
                 |> ignore;
                 if res <> 0
                 then false
-                else (*exec t*) true
+                else true
               end
-    (*in
-    exec commands*)
 
-  (* Helper to set up and run tests for a given assignment *)
+  (* Helper to set up and run tests for a given assignment
+   * This function is responsible for, among other things,
+   * setting up the directory to run tests in and collecting
+   * the stdout and stderr of the tests as they run.
+   * It returns the base64 encoded results of the testing. *)
   let run_tests c netid timeout files commands =
     let cur = Unix.getcwd () in
     dbg ("Writing files for " ^ netid);
@@ -197,7 +205,8 @@ module ClientImpl : Client = struct
     in
     Unix.chdir cur; res
 
-
+  (* main runs the client until the testing server goes down or
+   * broadcasts the fact that there are no more tests to run. *)
   let main c =
     dbg "Entered main loop.";
     if !(c.finished) then Ok () else
@@ -228,6 +237,7 @@ module ClientImpl : Client = struct
     with
     | e -> Err e
 
+  (* Frees any resources held by a client. *)
   let close c =
     dbg "Closing...";
     let s = SubCtxt.close c.sub in
