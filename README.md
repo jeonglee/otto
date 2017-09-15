@@ -1,7 +1,6 @@
-## Requirements
+## Refer to 'Introduction to Otto'!
 
-Refer to 'Introduction to Otto'!
-
+# Requirements
 OPAM:
 * zmq=4.0-7
 * base64
