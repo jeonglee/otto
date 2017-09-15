@@ -1,7 +1,6 @@
-# botnet-fiesta
-
-
 ## Requirements
+
+Refer to 'Introduction to Otto'!
 
 OPAM:
 * zmq=4.0-7
